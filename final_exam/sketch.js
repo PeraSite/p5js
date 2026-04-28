@@ -1,35 +1,839 @@
 let handPose;
 let video;
 let hands = [];
+let handInputs = [];
+let previousPinches = [];
+
+const NOTE_RADIUS = 46;
+const APPROACH_TIME = 1200;
+const APPROACH_RADIUS = 150;
+const SLIDER_TOLERANCE = 64;
+const PERFECT_WINDOW = 80;
+const GOOD_WINDOW = 150;
+const BAD_WINDOW = 230;
+const PINCH_MEMORY = 260;
+const PINCH_START_RATIO = 0.38;
+const PINCH_RELEASE_RATIO = 0.52;
+const PINCH_MAX_START_DISTANCE = 34;
+const CALIBRATION_STEP_TIME = 1200;
+
+let notes = [];
+let gameState = "ready";
+let countdownStartedAt = 0;
+let gameStartedAt = 0;
+let score = 0;
+let combo = 0;
+let maxCombo = 0;
+let earnedAccuracyScore = 0;
+let judgedAccuracyMax = 0;
+let lastJudge = null;
+let lastJudgeAt = 0;
+let calibrationPhaseStartedAt = 0;
+let openCalibrationRatios = [];
+let pinchCalibrationRatios = [];
+let calibratedPinchStartRatio = PINCH_START_RATIO;
+let calibratedPinchReleaseRatio = PINCH_RELEASE_RATIO;
 
 function preload() {
-    handPose = ml5.handPose();
+  handPose = ml5.handPose({ maxHands: 2 });
 }
 
 function setup() {
-    createCanvas(640, 480);
-
-    video = createCapture(VIDEO);
-    video.size(640, 480);
-    video.hide();
-
-    handPose.detectStart(video, gotHands);
+  createCanvas(windowWidth, windowHeight);
+  textFont("Arial");
+  video = createCapture(VIDEO);
+  video.size(640, 480);
+  video.hide();
+  handPose.detectStart(video, gotHands);
+  buildChart();
 }
 
 function draw() {
-    image(video, 0, 0, width, height);
+  drawMirroredCamera();
+  handInputs = readHandInputs();
 
-    for (let i = 0; i < hands.length; i++) {
-        let hand = hands[i];
-        for (let j = 0; j < hand.keypoints.length; j++) {
-            let keypoint = hand.keypoints[j];
-            fill(0, 255, 0);
-            noStroke();
-            circle(keypoint.x, keypoint.y, 10);
-        }
-    }
+  if (gameState === "calibrateOpen" || gameState === "calibratePinch") {
+    updateCalibration();
+  }
+
+  if (gameState === "countdown" && millis() - countdownStartedAt >= 3000) {
+    startPlaying();
+  }
+
+  const gameTime = getGameTime();
+  if (gameState === "playing") {
+    updateGame(gameTime);
+  }
+
+  drawGame(gameTime);
+  drawCursors();
+  drawPinchDebug();
+  previousPinches = handInputs.map((hand) => hand.pinching);
+}
+
+function mousePressed() {
+  if (gameState === "ready" || gameState === "finished") {
+    startCalibration();
+  }
+}
+
+function keyPressed() {
+  if (key === " " && (gameState === "ready" || gameState === "finished")) {
+    startCalibration();
+  }
+  if (key === "r" || key === "R") {
+    resetGame();
+  }
+}
+
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
 }
 
 function gotHands(results) {
-    hands = results;
+  hands = results;
+}
+
+function buildChart() {
+  notes = [
+    tap(1000, 0.26, 0.38),
+    tap(1800, 0.48, 0.58),
+    tap(2600, 0.72, 0.36),
+    tap(3400, 0.38, 0.72),
+    tap(4300, 0.63, 0.64),
+    dual(5400, 0.30, 0.42, 0.70, 0.42),
+    tap(6500, 0.50, 0.30),
+    slider(7600, 1700, [
+      { x: 0.24, y: 0.70 },
+      { x: 0.50, y: 0.28 },
+      { x: 0.76, y: 0.66 },
+    ]),
+    tap(10100, 0.30, 0.34),
+    tap(10800, 0.70, 0.34),
+    dual(11600, 0.32, 0.68, 0.68, 0.68),
+    slider(12900, 1600, [
+      { x: 0.75, y: 0.32 },
+      { x: 0.52, y: 0.64 },
+      { x: 0.25, y: 0.36 },
+    ]),
+    tap(15200, 0.50, 0.50),
+    dual(16000, 0.26, 0.50, 0.74, 0.50),
+    tap(17000, 0.36, 0.32),
+    tap(17700, 0.64, 0.70),
+    slider(18800, 1900, [
+      { x: 0.20, y: 0.54 },
+      { x: 0.50, y: 0.76 },
+      { x: 0.80, y: 0.38 },
+    ]),
+    dual(21400, 0.34, 0.38, 0.66, 0.62),
+    tap(22600, 0.50, 0.46),
+  ];
+}
+
+function tap(time, x, y) {
+  return {
+    id: `tap-${time}`,
+    type: "tap",
+    time,
+    targets: [{ x, y }],
+    hit: false,
+    missed: false,
+    maxScore: 300,
+    accuracyMax: 300,
+  };
+}
+
+function dual(time, x1, y1, x2, y2) {
+  return {
+    id: `dual-${time}`,
+    type: "dual",
+    time,
+    targets: [
+      { x: x1, y: y1 },
+      { x: x2, y: y2 },
+    ],
+    hit: false,
+    missed: false,
+    maxScore: 600,
+    accuracyMax: 600,
+  };
+}
+
+function slider(time, duration, points) {
+  return {
+    id: `slider-${time}`,
+    type: "slider",
+    time,
+    duration,
+    points,
+    started: false,
+    completed: false,
+    missed: false,
+    coverage: 0,
+    frames: 0,
+    maxScore: 500,
+    accuracyMax: 500,
+  };
+}
+
+function startCountdown() {
+  resetGame();
+  gameState = "countdown";
+  countdownStartedAt = millis();
+}
+
+function startCalibration() {
+  resetGame();
+  gameState = "calibrateOpen";
+  calibrationPhaseStartedAt = millis();
+  openCalibrationRatios = [];
+  pinchCalibrationRatios = [];
+}
+
+function startPlaying() {
+  gameState = "playing";
+  gameStartedAt = millis();
+}
+
+function resetGame() {
+  buildChart();
+  score = 0;
+  combo = 0;
+  maxCombo = 0;
+  earnedAccuracyScore = 0;
+  judgedAccuracyMax = 0;
+  lastJudge = null;
+  lastJudgeAt = 0;
+  previousPinches = [];
+}
+
+function updateCalibration() {
+  const primaryHand = handInputs[0];
+  if (!primaryHand) {
+    calibrationPhaseStartedAt = millis();
+    return;
+  }
+
+  if (gameState === "calibrateOpen") {
+    openCalibrationRatios.push(primaryHand.pinchRatio);
+    if (millis() - calibrationPhaseStartedAt >= CALIBRATION_STEP_TIME) {
+      gameState = "calibratePinch";
+      calibrationPhaseStartedAt = millis();
+      previousPinches = [];
+    }
+    return;
+  }
+
+  pinchCalibrationRatios.push(primaryHand.pinchRatio);
+  if (millis() - calibrationPhaseStartedAt >= CALIBRATION_STEP_TIME) {
+    applyPinchCalibration();
+    startCountdown();
+  }
+}
+
+function applyPinchCalibration() {
+  const openRatio = median(openCalibrationRatios);
+  const pinchedRatio = percentile(pinchCalibrationRatios, 0.2);
+  const hasUsefulSamples = openCalibrationRatios.length > 8 && pinchCalibrationRatios.length > 8;
+  const looksLikePinch = pinchedRatio > 0 && pinchedRatio < openRatio * 0.78;
+
+  if (!hasUsefulSamples || !looksLikePinch) {
+    calibratedPinchStartRatio = PINCH_START_RATIO;
+    calibratedPinchReleaseRatio = PINCH_RELEASE_RATIO;
+    return;
+  }
+
+  calibratedPinchStartRatio = constrain(pinchedRatio + (openRatio - pinchedRatio) * 0.25, 0.24, 0.46);
+  calibratedPinchReleaseRatio = constrain(calibratedPinchStartRatio + 0.14, calibratedPinchStartRatio + 0.08, 0.62);
+}
+
+function getGameTime() {
+  if (gameState !== "playing") return 0;
+  return millis() - gameStartedAt;
+}
+
+function updateGame(gameTime) {
+  for (const note of notes) {
+    if (note.type === "slider") {
+      updateSlider(note, gameTime);
+    } else {
+      updateTapLike(note, gameTime);
+    }
+  }
+
+  const lastNote = notes[notes.length - 1];
+  const finishAt = lastNote.time + (lastNote.duration || 0) + 1400;
+  if (gameTime > finishAt) {
+    gameState = "finished";
+  }
+}
+
+function updateTapLike(note, gameTime) {
+  if (note.hit || note.missed) return;
+
+  if (abs(gameTime - note.time) <= BAD_WINDOW) {
+    if (note.type === "tap") {
+      const pinchedHand = handInputs.find((hand) => {
+        return hand.justPinched && isInsideTarget(hand.cursor, note.targets[0], 1.22);
+      });
+      if (pinchedHand) {
+        judgeNote(note, abs(gameTime - note.time));
+      }
+    }
+
+    if (note.type === "dual") {
+      const matched = matchDualTargets(note, gameTime);
+      if (matched) {
+        judgeNote(note, abs(gameTime - note.time));
+      }
+    }
+  }
+
+  if (gameTime > note.time + BAD_WINDOW) {
+    missNote(note);
+  }
+}
+
+function updateSlider(note, gameTime) {
+  if (note.completed || note.missed) return;
+
+  const startPoint = note.points[0];
+  const endTime = note.time + note.duration;
+
+  if (!note.started && abs(gameTime - note.time) <= BAD_WINDOW) {
+    const starter = handInputs.find((hand) => {
+      return hand.justPinched && isInsideTarget(hand.cursor, startPoint, 1.25);
+    });
+    if (starter) {
+      note.started = true;
+      showJudge("SLIDE", color(120, 230, 255));
+    }
+  }
+
+  if (!note.started && gameTime > note.time + BAD_WINDOW) {
+    missNote(note);
+    return;
+  }
+
+  if (note.started && gameTime >= note.time && gameTime <= endTime) {
+    const progress = constrain((gameTime - note.time) / note.duration, 0, 1);
+    const pathPoint = pointOnSlider(note, progress);
+    const tracking = handInputs.some((hand) => {
+      return dist(hand.cursor.x, hand.cursor.y, pathPoint.x, pathPoint.y) <= SLIDER_TOLERANCE;
+    });
+    note.frames += 1;
+    if (tracking) {
+      note.coverage += 1;
+    }
+  }
+
+  if (note.started && gameTime > endTime) {
+    completeSlider(note);
+  }
+}
+
+function matchDualTargets(note, gameTime) {
+  const candidates = handInputs
+    .map((hand, index) => ({ hand, index }))
+    .filter(({ hand }) => {
+      return hand.lastPinchAt !== null && abs(hand.lastPinchAt - note.time) <= BAD_WINDOW && gameTime - hand.lastPinchAt <= PINCH_MEMORY;
+    });
+
+  if (candidates.length < 2) return false;
+
+  for (let i = 0; i < candidates.length; i++) {
+    for (let j = 0; j < candidates.length; j++) {
+      if (i === j) continue;
+      const first = candidates[i].hand.cursor;
+      const second = candidates[j].hand.cursor;
+      const firstFits = isInsideTarget(first, note.targets[0], 1.28) && isInsideTarget(second, note.targets[1], 1.28);
+      const swappedFits = isInsideTarget(first, note.targets[1], 1.28) && isInsideTarget(second, note.targets[0], 1.28);
+      if (firstFits || swappedFits) return true;
+    }
+  }
+  return false;
+}
+
+function judgeNote(note, delta) {
+  note.hit = true;
+  let label = "BAD";
+  let addScore = note.type === "dual" ? 120 : 60;
+  let accuracy = note.type === "dual" ? 120 : 60;
+  let judgeColor = color(255, 185, 90);
+
+  if (delta <= PERFECT_WINDOW) {
+    label = "PERFECT";
+    addScore = note.maxScore;
+    accuracy = note.accuracyMax;
+    judgeColor = color(110, 245, 255);
+  } else if (delta <= GOOD_WINDOW) {
+    label = "GOOD";
+    addScore = note.type === "dual" ? 360 : 180;
+    accuracy = note.type === "dual" ? 360 : 180;
+    judgeColor = color(145, 255, 160);
+  }
+
+  score += addScore + combo * 4;
+  earnedAccuracyScore += accuracy;
+  judgedAccuracyMax += note.accuracyMax;
+  combo += 1;
+  maxCombo = max(maxCombo, combo);
+  showJudge(label, judgeColor);
+}
+
+function missNote(note) {
+  note.missed = true;
+  judgedAccuracyMax += note.accuracyMax;
+  combo = 0;
+  showJudge("MISS", color(255, 95, 95));
+}
+
+function completeSlider(note) {
+  note.completed = true;
+  const ratio = note.frames === 0 ? 0 : note.coverage / note.frames;
+  judgedAccuracyMax += note.accuracyMax;
+
+  if (ratio >= 0.78) {
+    score += note.maxScore + combo * 6;
+    earnedAccuracyScore += note.accuracyMax;
+    combo += 1;
+    showJudge("PERFECT", color(110, 245, 255));
+  } else if (ratio >= 0.55) {
+    score += 300 + combo * 4;
+    earnedAccuracyScore += 300;
+    combo += 1;
+    showJudge("GOOD", color(145, 255, 160));
+  } else if (ratio >= 0.32) {
+    score += 120;
+    earnedAccuracyScore += 120;
+    combo = 0;
+    showJudge("BAD", color(255, 185, 90));
+  } else {
+    combo = 0;
+    showJudge("MISS", color(255, 95, 95));
+  }
+
+  maxCombo = max(maxCombo, combo);
+}
+
+function showJudge(label, judgeColor) {
+  lastJudge = { label, judgeColor };
+  lastJudgeAt = millis();
+}
+
+function drawGame(gameTime) {
+  drawTopHud();
+
+  if (gameState === "ready") {
+    drawCenterText("START", "Click or press Space");
+    return;
+  }
+
+  if (gameState === "calibrateOpen") {
+    drawCalibration("OPEN HAND", "Keep thumb and index apart");
+    return;
+  }
+
+  if (gameState === "calibratePinch") {
+    drawCalibration("PINCH", "Touch thumb and index together");
+    return;
+  }
+
+  if (gameState === "countdown") {
+    const left = 3 - floor((millis() - countdownStartedAt) / 1000);
+    drawCenterText(str(max(left, 1)), "Get both hands in camera");
+    return;
+  }
+
+  drawNotes(gameTime);
+  drawJudgeText();
+
+  if (gameState === "finished") {
+    drawFinished();
+  }
+}
+
+function drawTopHud() {
+  const acc = judgedAccuracyMax === 0 ? 100 : (earnedAccuracyScore / judgedAccuracyMax) * 100;
+  noStroke();
+  fill(0, 0, 0, 115);
+  rect(0, 0, width, 62);
+
+  fill(255);
+  textAlign(LEFT, CENTER);
+  textSize(18);
+  text(`Score ${floor(score)}`, 24, 24);
+  text(`Combo ${combo}`, 24, 46);
+
+  textAlign(RIGHT, CENTER);
+  text(`Acc ${nf(constrain(acc, 0, 100), 2, 1)}%`, width - 24, 24);
+  text(`Max ${maxCombo}`, width - 24, 46);
+}
+
+function drawNotes(gameTime) {
+  for (const note of notes) {
+    if (note.hit || note.missed || note.completed) continue;
+
+    if (note.type === "slider") {
+      drawSlider(note, gameTime);
+    } else {
+      drawTapLike(note, gameTime);
+    }
+  }
+}
+
+function drawTapLike(note, gameTime) {
+  const visible = gameTime >= note.time - APPROACH_TIME && gameTime <= note.time + BAD_WINDOW;
+  if (!visible) return;
+
+  const targetColor = note.type === "dual" ? color(255, 210, 110) : color(110, 245, 255);
+  const approach = approachSize(note.time, gameTime);
+
+  if (note.type === "dual") {
+    const a = screenPoint(note.targets[0]);
+    const b = screenPoint(note.targets[1]);
+    stroke(255, 210, 110, 90);
+    strokeWeight(3);
+    line(a.x, a.y, b.x, b.y);
+  }
+
+  for (const target of note.targets) {
+    const point = screenPoint(target);
+    drawTarget(point.x, point.y, NOTE_RADIUS, approach, targetColor);
+  }
+}
+
+function drawSlider(note, gameTime) {
+  const visible = gameTime >= note.time - APPROACH_TIME && gameTime <= note.time + note.duration + 250;
+  if (!visible) return;
+
+  const sliderColor = color(190, 145, 255);
+  const start = screenPoint(note.points[0]);
+  const approach = approachSize(note.time, gameTime);
+
+  noFill();
+  stroke(sliderColor.levels[0], sliderColor.levels[1], sliderColor.levels[2], 130);
+  strokeWeight(22);
+  beginShape();
+  for (let i = 0; i <= 32; i++) {
+    const point = pointOnSlider(note, i / 32);
+    vertex(point.x, point.y);
+  }
+  endShape();
+
+  stroke(255, 255, 255, 170);
+  strokeWeight(3);
+  beginShape();
+  for (let i = 0; i <= 32; i++) {
+    const point = pointOnSlider(note, i / 32);
+    vertex(point.x, point.y);
+  }
+  endShape();
+
+  drawTarget(start.x, start.y, NOTE_RADIUS, approach, sliderColor);
+
+  if (note.started) {
+    const progress = constrain((gameTime - note.time) / note.duration, 0, 1);
+    const follow = pointOnSlider(note, progress);
+    fill(255);
+    noStroke();
+    circle(follow.x, follow.y, 20);
+  }
+}
+
+function drawTarget(x, y, radius, approach, targetColor) {
+  noStroke();
+  fill(red(targetColor), green(targetColor), blue(targetColor), 72);
+  circle(x, y, radius * 2.15);
+
+  stroke(255);
+  strokeWeight(4);
+  fill(red(targetColor), green(targetColor), blue(targetColor), 210);
+  circle(x, y, radius * 2);
+
+  noFill();
+  stroke(red(targetColor), green(targetColor), blue(targetColor), 210);
+  strokeWeight(4);
+  circle(x, y, approach * 2);
+}
+
+function drawJudgeText() {
+  if (!lastJudge) return;
+  const age = millis() - lastJudgeAt;
+  if (age > 650) return;
+
+  const alpha = map(age, 0, 650, 255, 0);
+  fill(red(lastJudge.judgeColor), green(lastJudge.judgeColor), blue(lastJudge.judgeColor), alpha);
+  noStroke();
+  textAlign(CENTER, CENTER);
+  textSize(40);
+  textStyle(BOLD);
+  text(lastJudge.label, width / 2, height * 0.22);
+  textStyle(NORMAL);
+}
+
+function drawCenterText(title, subtitle) {
+  fill(0, 0, 0, 120);
+  rect(0, 0, width, height);
+  textAlign(CENTER, CENTER);
+  noStroke();
+  fill(255);
+  textStyle(BOLD);
+  textSize(min(width, height) * 0.12);
+  text(title, width / 2, height / 2 - 20);
+  textStyle(NORMAL);
+  textSize(18);
+  fill(255, 255, 255, 210);
+  text(subtitle, width / 2, height / 2 + 58);
+}
+
+function drawCalibration(title, subtitle) {
+  const progress = constrain((millis() - calibrationPhaseStartedAt) / CALIBRATION_STEP_TIME, 0, 1);
+  drawCenterText(title, subtitle);
+
+  const barWidth = min(width * 0.42, 320);
+  const barHeight = 8;
+  const x = width / 2 - barWidth / 2;
+  const y = height / 2 + 88;
+  noStroke();
+  fill(255, 255, 255, 70);
+  rect(x, y, barWidth, barHeight, 8);
+  fill(255, 255, 255, 225);
+  rect(x, y, barWidth * progress, barHeight, 8);
+
+  if (handInputs.length === 0) {
+    fill(255, 120, 120);
+    textAlign(CENTER, CENTER);
+    textSize(16);
+    text("No hand detected", width / 2, y + 34);
+  }
+}
+
+function drawFinished() {
+  const acc = judgedAccuracyMax === 0 ? 100 : (earnedAccuracyScore / judgedAccuracyMax) * 100;
+  fill(0, 0, 0, 165);
+  rect(0, 0, width, height);
+  textAlign(CENTER, CENTER);
+  noStroke();
+  fill(255);
+  textStyle(BOLD);
+  textSize(54);
+  text("FINISH", width / 2, height / 2 - 82);
+  textStyle(NORMAL);
+  textSize(24);
+  text(`Score ${floor(score)}`, width / 2, height / 2 - 20);
+  text(`Accuracy ${nf(constrain(acc, 0, 100), 2, 1)}%`, width / 2, height / 2 + 18);
+  text(`Max Combo ${maxCombo}`, width / 2, height / 2 + 56);
+  textSize(16);
+  fill(255, 255, 255, 190);
+  text("Click to retry", width / 2, height / 2 + 108);
+}
+
+function drawCursors() {
+  for (const hand of handInputs) {
+    const cursor = hand.cursor;
+    stroke(hand.pinching ? color(255, 235, 120) : color(255));
+    strokeWeight(3);
+    line(cursor.x, cursor.y, hand.thumb.x, hand.thumb.y);
+
+    noStroke();
+    fill(hand.pinching ? color(255, 235, 120) : color(255, 255, 255, 235));
+    circle(cursor.x, cursor.y, hand.pinching ? 44 : 34);
+
+    fill(0, 0, 0, 180);
+    circle(cursor.x, cursor.y, 10);
+  }
+}
+
+function drawPinchDebug() {
+  const panelWidth = 230;
+  const panelHeight = 38 + max(1, min(handInputs.length, 2)) * 48;
+  const x = 16;
+  const y = 78;
+
+  noStroke();
+  fill(0, 0, 0, 130);
+  rect(x, y, panelWidth, panelHeight, 8);
+
+  fill(255, 255, 255, 220);
+  textAlign(LEFT, CENTER);
+  textSize(13);
+  text("Pinch meter", x + 12, y + 18);
+
+  if (handInputs.length === 0) {
+    fill(255, 255, 255, 150);
+    text("Hand: none", x + 12, y + 54);
+    return;
+  }
+
+  const handCount = min(handInputs.length, 2);
+  for (let i = 0; i < handCount; i++) {
+    const hand = handInputs[i];
+    const rowY = y + 46 + i * 48;
+    const meterX = x + 12;
+    const meterY = rowY + 14;
+    const meterWidth = panelWidth - 24;
+    const meterHeight = 8;
+    const threshold = hand.pinching ? hand.releaseThreshold : hand.startThreshold;
+    const distanceRatio = constrain(hand.pinchDistance / max(hand.releaseThreshold * 1.7, 1), 0, 1);
+    const thresholdRatio = constrain(threshold / max(hand.releaseThreshold * 1.7, 1), 0, 1);
+
+    fill(hand.pinching ? color(255, 235, 120) : color(255, 255, 255, 190));
+    text(`Hand ${i + 1}: ${hand.pinching ? "PINCH" : "open"}`, meterX, rowY);
+
+    fill(255, 255, 255, 55);
+    rect(meterX, meterY, meterWidth, meterHeight, 6);
+    fill(hand.pinching ? color(255, 235, 120) : color(110, 245, 255));
+    rect(meterX, meterY, meterWidth * (1 - distanceRatio), meterHeight, 6);
+
+    stroke(255, 120, 120, 220);
+    strokeWeight(2);
+    const thresholdX = meterX + meterWidth * (1 - thresholdRatio);
+    line(thresholdX, meterY - 4, thresholdX, meterY + meterHeight + 4);
+
+    noStroke();
+    fill(255, 255, 255, 130);
+    textSize(11);
+    text(`${floor(hand.pinchDistance)}px / ${floor(threshold)}px`, meterX, rowY + 34);
+    textSize(13);
+  }
+}
+
+function drawMirroredCamera() {
+  background(10);
+  const cameraFrame = videoRect();
+
+  push();
+  translate(cameraFrame.x + cameraFrame.w, cameraFrame.y);
+  scale(-1, 1);
+  image(video, 0, 0, cameraFrame.w, cameraFrame.h);
+  pop();
+
+  fill(0, 0, 0, 105);
+  noStroke();
+  rect(0, 0, width, height);
+}
+
+function readHandInputs() {
+  const inputs = [];
+  for (let i = 0; i < hands.length; i++) {
+    const hand = hands[i];
+    const wrist = keypoint(hand, 0, "wrist");
+    const thumb = keypoint(hand, 4, "thumb_tip");
+    const index = keypoint(hand, 8, "index_finger_tip");
+    const indexBase = keypoint(hand, 5, "index_finger_mcp");
+
+    if (!wrist || !thumb || !index || !indexBase) continue;
+
+    const cursor = mirroredPoint(index);
+    const thumbPoint = mirroredPoint(thumb);
+    const wristPoint = mirroredPoint(wrist);
+    const basePoint = mirroredPoint(indexBase);
+    const handScale = max(45, dist(wristPoint.x, wristPoint.y, basePoint.x, basePoint.y));
+    const pinchDistance = dist(cursor.x, cursor.y, thumbPoint.x, thumbPoint.y);
+    const wasPinching = previousPinches[i] || false;
+    const startThreshold = min(handScale * calibratedPinchStartRatio, PINCH_MAX_START_DISTANCE);
+    const releaseThreshold = min(handScale * calibratedPinchReleaseRatio, PINCH_MAX_START_DISTANCE * 1.35);
+    const pinching = wasPinching ? pinchDistance < releaseThreshold : pinchDistance < startThreshold;
+    const justPinched = pinching && !wasPinching;
+    const lastPinchAt = justPinched ? getGameTime() : getPreviousPinchTime(i, pinching);
+
+    inputs.push({
+      cursor,
+      thumb: thumbPoint,
+      pinching,
+      justPinched,
+      lastPinchAt,
+      pinchDistance,
+      handScale,
+      pinchRatio: pinchDistance / handScale,
+      startThreshold,
+      releaseThreshold,
+      rawIndex: i,
+    });
+  }
+  return inputs;
+}
+
+function getPreviousPinchTime(index, pinching) {
+  const previousInput = handInputs.find((hand) => hand.rawIndex === index);
+  if (pinching && previousInput) return previousInput.lastPinchAt;
+  return null;
+}
+
+function keypoint(hand, fallbackIndex, name) {
+  if (!hand || !hand.keypoints) return null;
+  return hand.keypoints.find((point) => point.name === name) || hand.keypoints[fallbackIndex];
+}
+
+function mirroredPoint(point) {
+  const rect = videoRect();
+  return {
+    x: rect.x + (1 - point.x / video.width) * rect.w,
+    y: rect.y + (point.y / video.height) * rect.h,
+  };
+}
+
+function screenPoint(point) {
+  return {
+    x: point.x * width,
+    y: point.y * height,
+  };
+}
+
+function videoRect() {
+  const videoRatio = video.width / video.height;
+  const canvasRatio = width / height;
+  let w;
+  let h;
+  if (canvasRatio > videoRatio) {
+    w = width;
+    h = width / videoRatio;
+  } else {
+    h = height;
+    w = height * videoRatio;
+  }
+  return {
+    x: (width - w) / 2,
+    y: (height - h) / 2,
+    w,
+    h,
+  };
+}
+
+function approachSize(noteTime, gameTime) {
+  const left = constrain((noteTime - gameTime) / APPROACH_TIME, 0, 1);
+  return NOTE_RADIUS + left * (APPROACH_RADIUS - NOTE_RADIUS);
+}
+
+function isInsideTarget(cursor, target, multiplier) {
+  const point = screenPoint(target);
+  return dist(cursor.x, cursor.y, point.x, point.y) <= NOTE_RADIUS * multiplier;
+}
+
+function pointOnSlider(note, progress) {
+  const a = screenPoint(note.points[0]);
+  const b = screenPoint(note.points[1]);
+  const c = screenPoint(note.points[2]);
+  const ab = lerpPoint(a, b, progress);
+  const bc = lerpPoint(b, c, progress);
+  return lerpPoint(ab, bc, progress);
+}
+
+function lerpPoint(a, b, amount) {
+  return {
+    x: lerp(a.x, b.x, amount),
+    y: lerp(a.y, b.y, amount),
+  };
+}
+
+function median(values) {
+  return percentile(values, 0.5);
+}
+
+function percentile(values, amount) {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = floor(constrain(amount, 0, 1) * (sorted.length - 1));
+  return sorted[index];
 }
