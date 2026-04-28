@@ -293,7 +293,7 @@ function updateTapLike(note, gameTime) {
   if (abs(gameTime - note.time) <= BAD_WINDOW) {
     if (note.type === "tap") {
       const pinchedHand = handInputs.find((hand) => {
-        return hand.justPinched && isInsideTarget(hand.cursor, note.targets[0], 1.45);
+        return hand.justPinched && handMatchesTarget(hand, note.targets[0]) && isInsideTarget(hand.cursor, note.targets[0], 1.45);
       });
       if (pinchedHand) {
         judgeNote(note, abs(gameTime - note.time));
@@ -321,7 +321,7 @@ function updateSlider(note, gameTime) {
 
   if (!note.started && abs(gameTime - note.time) <= BAD_WINDOW) {
     const starter = handInputs.find((hand) => {
-      return hand.justPinched && isInsideTarget(hand.cursor, startPoint, 1.45);
+      return hand.justPinched && handMatchesTarget(hand, startPoint) && isInsideTarget(hand.cursor, startPoint, 1.45);
     });
     if (starter) {
       note.started = true;
@@ -338,7 +338,7 @@ function updateSlider(note, gameTime) {
     const progress = constrain((gameTime - note.time) / note.duration, 0, 1);
     const pathPoint = pointOnSlider(note, progress);
     const tracking = handInputs.some((hand) => {
-      return dist(hand.cursor.x, hand.cursor.y, pathPoint.x, pathPoint.y) <= SLIDER_TOLERANCE;
+      return handMatchesTarget(hand, startPoint) && dist(hand.cursor.x, hand.cursor.y, pathPoint.x, pathPoint.y) <= SLIDER_TOLERANCE;
     });
     note.frames += 1;
     if (tracking) {
@@ -365,8 +365,16 @@ function matchDualTargets(note, gameTime) {
       if (i === j) continue;
       const first = candidates[i].hand.cursor;
       const second = candidates[j].hand.cursor;
-      const firstFits = isInsideTarget(first, note.targets[0], 1.48) && isInsideTarget(second, note.targets[1], 1.48);
-      const swappedFits = isInsideTarget(first, note.targets[1], 1.48) && isInsideTarget(second, note.targets[0], 1.48);
+      const firstFits =
+        handMatchesTarget(candidates[i].hand, note.targets[0]) &&
+        handMatchesTarget(candidates[j].hand, note.targets[1]) &&
+        isInsideTarget(first, note.targets[0], 1.48) &&
+        isInsideTarget(second, note.targets[1], 1.48);
+      const swappedFits =
+        handMatchesTarget(candidates[i].hand, note.targets[1]) &&
+        handMatchesTarget(candidates[j].hand, note.targets[0]) &&
+        isInsideTarget(first, note.targets[1], 1.48) &&
+        isInsideTarget(second, note.targets[0], 1.48);
       if (firstFits || swappedFits) return true;
     }
   }
@@ -473,6 +481,7 @@ function addEffect(point, type, effectColor) {
 }
 
 function drawGame(gameTime) {
+  drawLaneGuides();
   drawTopHud();
 
   if (gameState === "ready") {
@@ -503,6 +512,32 @@ function drawGame(gameTime) {
   if (gameState === "finished") {
     drawFinished();
   }
+}
+
+function drawLaneGuides() {
+  const centerLeft = LANES.left.x1 * width;
+  const centerRight = LANES.right.x0 * width;
+  const top = 62;
+
+  noStroke();
+  fill(0, 0, 0, 60);
+  rect(0, top, centerLeft, height - top);
+  rect(centerRight, top, width - centerRight, height - top);
+
+  fill(0, 0, 0, 145);
+  rect(centerLeft, top, centerRight - centerLeft, height - top);
+
+  stroke(255, 255, 255, 44);
+  strokeWeight(2);
+  line(centerLeft, top, centerLeft, height);
+  line(centerRight, top, centerRight, height);
+
+  noStroke();
+  textAlign(CENTER, CENTER);
+  textSize(13);
+  fill(255, 255, 255, 95);
+  text(LANES.left.label, (LANES.left.x0 + LANES.left.x1) * 0.5 * width, top + 24);
+  text(LANES.right.label, (LANES.right.x0 + LANES.right.x1) * 0.5 * width, top + 24);
 }
 
 function drawTopHud() {
@@ -588,7 +623,7 @@ function drawSlider(note, gameTime) {
     const progress = constrain((gameTime - note.time) / note.duration, 0, 1);
     const follow = pointOnSlider(note, progress);
     const tracking = handInputs.some((hand) => {
-      return dist(hand.cursor.x, hand.cursor.y, follow.x, follow.y) <= SLIDER_TOLERANCE;
+      return handMatchesTarget(hand, note.points[0]) && dist(hand.cursor.x, hand.cursor.y, follow.x, follow.y) <= SLIDER_TOLERANCE;
     });
 
     noFill();
@@ -736,12 +771,13 @@ function drawFinished() {
 function drawCursors() {
   for (const hand of handInputs) {
     const cursor = hand.cursor;
-    stroke(hand.pinching ? color(255, 235, 120) : color(255));
+    const cursorColor = hand.side === "left" ? color(110, 245, 255) : color(255, 210, 110);
+    stroke(hand.pinching ? color(255, 235, 120) : cursorColor);
     strokeWeight(3);
     line(cursor.x, cursor.y, hand.thumb.x, hand.thumb.y);
 
     noStroke();
-    fill(hand.pinching ? color(255, 235, 120) : color(255, 255, 255, 235));
+    fill(hand.pinching ? color(255, 235, 120) : cursorColor);
     circle(cursor.x, cursor.y, hand.pinching ? 44 : 34);
 
     fill(0, 0, 0, 180);
@@ -845,6 +881,7 @@ function readHandInputs() {
     inputs.push({
       cursor,
       thumb: thumbPoint,
+      side: cursor.x < width / 2 ? "left" : "right",
       pinching,
       justPinched,
       lastPinchAt,
@@ -879,10 +916,22 @@ function mirroredPoint(point) {
 }
 
 function screenPoint(point) {
+  if (point.side && LANES[point.side]) {
+    const lane = LANES[point.side];
+    return {
+      x: lerp(lane.x0 * width, lane.x1 * width, point.x),
+      y: point.y * height,
+    };
+  }
+
   return {
     x: point.x * width,
     y: point.y * height,
   };
+}
+
+function handMatchesTarget(hand, target) {
+  return !target.side || hand.side === target.side;
 }
 
 function videoRect() {
