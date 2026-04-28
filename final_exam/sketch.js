@@ -17,6 +17,10 @@ const PINCH_RELEASE_RATIO = 0.52;
 const PINCH_MAX_START_DISTANCE = 34;
 const CALIBRATION_STEP_TIME = 1200;
 const CALIBRATION_PINCH_RATIO = 0.72;
+const LANES = {
+  left: { x0: 0.08, x1: 0.42, label: "LEFT" },
+  right: { x0: 0.58, x1: 0.92, label: "RIGHT" },
+};
 
 let notes = [];
 let gameState = "ready";
@@ -34,6 +38,7 @@ let openCalibrationRatios = [];
 let pinchCalibrationRatios = [];
 let calibratedPinchStartRatio = PINCH_START_RATIO;
 let calibratedPinchReleaseRatio = PINCH_RELEASE_RATIO;
+let hitEffects = [];
 
 function preload() {
   handPose = ml5.handPose({ maxHands: 2 });
@@ -97,46 +102,46 @@ function gotHands(results) {
 
 function buildChart() {
   notes = [
-    tap(1000, 0.26, 0.38),
-    tap(1800, 0.48, 0.58),
-    tap(2600, 0.72, 0.36),
-    tap(3400, 0.38, 0.72),
-    tap(4300, 0.63, 0.64),
-    dual(5400, 0.30, 0.42, 0.70, 0.42),
-    tap(6500, 0.50, 0.30),
-    slider(7600, 1700, [
-      { x: 0.24, y: 0.70 },
-      { x: 0.50, y: 0.28 },
-      { x: 0.76, y: 0.66 },
+    tap(1000, "left", 0.28, 0.38),
+    tap(1800, "left", 0.62, 0.58),
+    tap(2600, "right", 0.36, 0.36),
+    tap(3400, "left", 0.46, 0.72),
+    tap(4300, "right", 0.58, 0.64),
+    dual(5400, 0.32, 0.42, 0.68, 0.42),
+    tap(6500, "right", 0.50, 0.30),
+    slider(7600, 1700, "left", [
+      { x: 0.22, y: 0.70 },
+      { x: 0.76, y: 0.28 },
+      { x: 0.38, y: 0.66 },
     ]),
-    tap(10100, 0.30, 0.34),
-    tap(10800, 0.70, 0.34),
-    dual(11600, 0.32, 0.68, 0.68, 0.68),
-    slider(12900, 1600, [
-      { x: 0.75, y: 0.32 },
-      { x: 0.52, y: 0.64 },
-      { x: 0.25, y: 0.36 },
+    tap(10100, "left", 0.34, 0.34),
+    tap(10800, "right", 0.66, 0.34),
+    dual(11600, 0.34, 0.68, 0.66, 0.68),
+    slider(12900, 1600, "right", [
+      { x: 0.78, y: 0.32 },
+      { x: 0.30, y: 0.64 },
+      { x: 0.66, y: 0.36 },
     ]),
-    tap(15200, 0.50, 0.50),
-    dual(16000, 0.26, 0.50, 0.74, 0.50),
-    tap(17000, 0.36, 0.32),
-    tap(17700, 0.64, 0.70),
-    slider(18800, 1900, [
-      { x: 0.20, y: 0.54 },
-      { x: 0.50, y: 0.76 },
-      { x: 0.80, y: 0.38 },
+    tap(15200, "left", 0.58, 0.50),
+    dual(16000, 0.28, 0.50, 0.72, 0.50),
+    tap(17000, "left", 0.38, 0.32),
+    tap(17700, "right", 0.62, 0.70),
+    slider(18800, 1900, "left", [
+      { x: 0.18, y: 0.54 },
+      { x: 0.72, y: 0.76 },
+      { x: 0.46, y: 0.38 },
     ]),
     dual(21400, 0.34, 0.38, 0.66, 0.62),
-    tap(22600, 0.50, 0.46),
+    tap(22600, "right", 0.48, 0.46),
   ];
 }
 
-function tap(time, x, y) {
+function tap(time, side, x, y) {
   return {
     id: `tap-${time}`,
     type: "tap",
     time,
-    targets: [{ x, y }],
+    targets: [target(side, x, y)],
     hit: false,
     missed: false,
     maxScore: 300,
@@ -150,8 +155,8 @@ function dual(time, x1, y1, x2, y2) {
     type: "dual",
     time,
     targets: [
-      { x: x1, y: y1 },
-      { x: x2, y: y2 },
+      target("left", x1, y1),
+      target("right", x2, y2),
     ],
     hit: false,
     missed: false,
@@ -160,13 +165,13 @@ function dual(time, x1, y1, x2, y2) {
   };
 }
 
-function slider(time, duration, points) {
+function slider(time, duration, side, points) {
   return {
     id: `slider-${time}`,
     type: "slider",
     time,
     duration,
-    points,
+    points: points.map((point) => target(side, point.x, point.y)),
     started: false,
     completed: false,
     missed: false,
@@ -175,6 +180,10 @@ function slider(time, duration, points) {
     maxScore: 500,
     accuracyMax: 500,
   };
+}
+
+function target(side, x, y) {
+  return { side, x, y };
 }
 
 function startCountdown() {
@@ -205,6 +214,7 @@ function resetGame() {
   judgedAccuracyMax = 0;
   lastJudge = null;
   lastJudgeAt = 0;
+  hitEffects = [];
   previousPinches = [];
 }
 
@@ -388,6 +398,7 @@ function judgeNote(note, delta) {
   combo += 1;
   maxCombo = max(maxCombo, combo);
   showJudge(label, judgeColor);
+  addNoteEffect(note, "hit", judgeColor);
 }
 
 function missNote(note) {
@@ -395,6 +406,7 @@ function missNote(note) {
   judgedAccuracyMax += note.accuracyMax;
   combo = 0;
   showJudge("MISS", color(255, 95, 95));
+  addNoteEffect(note, "miss", color(255, 95, 95));
 }
 
 function completeSlider(note) {
@@ -407,19 +419,23 @@ function completeSlider(note) {
     earnedAccuracyScore += note.accuracyMax;
     combo += 1;
     showJudge("PERFECT", color(110, 245, 255));
+    addSliderEndEffect(note, "hit", color(110, 245, 255));
   } else if (ratio >= 0.55) {
     score += 300 + combo * 4;
     earnedAccuracyScore += 300;
     combo += 1;
     showJudge("GOOD", color(145, 255, 160));
+    addSliderEndEffect(note, "hit", color(145, 255, 160));
   } else if (ratio >= 0.32) {
     score += 120;
     earnedAccuracyScore += 120;
     combo = 0;
     showJudge("BAD", color(255, 185, 90));
+    addSliderEndEffect(note, "miss", color(255, 185, 90));
   } else {
     combo = 0;
     showJudge("MISS", color(255, 95, 95));
+    addSliderEndEffect(note, "miss", color(255, 95, 95));
   }
 
   maxCombo = max(maxCombo, combo);
@@ -428,6 +444,32 @@ function completeSlider(note) {
 function showJudge(label, judgeColor) {
   lastJudge = { label, judgeColor };
   lastJudgeAt = millis();
+}
+
+function addNoteEffect(note, type, effectColor) {
+  if (note.type === "slider") {
+    addSliderEndEffect(note, type, effectColor);
+    return;
+  }
+
+  for (const target of note.targets) {
+    addEffect(screenPoint(target), type, effectColor);
+  }
+}
+
+function addSliderEndEffect(note, type, effectColor) {
+  const point = note.started || note.completed ? pointOnSlider(note, 1) : screenPoint(note.points[0]);
+  addEffect(point, type, effectColor);
+}
+
+function addEffect(point, type, effectColor) {
+  hitEffects.push({
+    x: point.x,
+    y: point.y,
+    type,
+    effectColor,
+    createdAt: millis(),
+  });
 }
 
 function drawGame(gameTime) {
@@ -455,6 +497,7 @@ function drawGame(gameTime) {
   }
 
   drawNotes(gameTime);
+  drawHitEffects();
   drawJudgeText();
 
   if (gameState === "finished") {
@@ -544,9 +587,22 @@ function drawSlider(note, gameTime) {
   if (note.started) {
     const progress = constrain((gameTime - note.time) / note.duration, 0, 1);
     const follow = pointOnSlider(note, progress);
+    const tracking = handInputs.some((hand) => {
+      return dist(hand.cursor.x, hand.cursor.y, follow.x, follow.y) <= SLIDER_TOLERANCE;
+    });
+
+    noFill();
+    stroke(tracking ? color(145, 255, 160, 210) : color(255, 95, 95, 190));
+    strokeWeight(4);
+    circle(follow.x, follow.y, SLIDER_TOLERANCE * 2);
+
+    fill(tracking ? color(145, 255, 160, 60) : color(255, 95, 95, 45));
+    noStroke();
+    circle(follow.x, follow.y, SLIDER_TOLERANCE * 2);
+
     fill(255);
     noStroke();
-    circle(follow.x, follow.y, 20);
+    circle(follow.x, follow.y, 24);
   }
 }
 
@@ -579,6 +635,45 @@ function drawJudgeText() {
   textStyle(BOLD);
   text(lastJudge.label, width / 2, height * 0.22);
   textStyle(NORMAL);
+}
+
+function drawHitEffects() {
+  const now = millis();
+  hitEffects = hitEffects.filter((effect) => now - effect.createdAt <= 620);
+
+  for (const effect of hitEffects) {
+    const age = now - effect.createdAt;
+    const progress = constrain(age / 620, 0, 1);
+    const alpha = map(progress, 0, 1, 230, 0);
+    const baseSize = effect.type === "hit" ? NOTE_RADIUS * 1.1 : NOTE_RADIUS * 0.9;
+    const ringSize = effect.type === "hit" ? baseSize + progress * 115 : baseSize + progress * 42;
+
+    noFill();
+    stroke(red(effect.effectColor), green(effect.effectColor), blue(effect.effectColor), alpha);
+    strokeWeight(effect.type === "hit" ? 7 - progress * 5 : 5);
+    circle(effect.x, effect.y, ringSize * 2);
+
+    if (effect.type === "hit") {
+      noStroke();
+      fill(red(effect.effectColor), green(effect.effectColor), blue(effect.effectColor), alpha * 0.32);
+      circle(effect.x, effect.y, (NOTE_RADIUS * 1.6 + progress * 65) * 2);
+
+      stroke(255, 255, 255, alpha * 0.75);
+      strokeWeight(3);
+      for (let i = 0; i < 8; i++) {
+        const angle = (TWO_PI / 8) * i + progress * 0.5;
+        const inner = NOTE_RADIUS * 0.65 + progress * 45;
+        const outer = inner + 16 + progress * 22;
+        line(effect.x + cos(angle) * inner, effect.y + sin(angle) * inner, effect.x + cos(angle) * outer, effect.y + sin(angle) * outer);
+      }
+    } else {
+      stroke(255, 95, 95, alpha);
+      strokeWeight(5);
+      const crossSize = NOTE_RADIUS * 0.45 + progress * 18;
+      line(effect.x - crossSize, effect.y - crossSize, effect.x + crossSize, effect.y + crossSize);
+      line(effect.x + crossSize, effect.y - crossSize, effect.x - crossSize, effect.y + crossSize);
+    }
+  }
 }
 
 function drawCenterText(title, subtitle) {
