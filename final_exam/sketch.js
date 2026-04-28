@@ -4,18 +4,19 @@ let hands = [];
 let handInputs = [];
 let previousPinches = [];
 
-const NOTE_RADIUS = 46;
+const NOTE_RADIUS = 60;
 const APPROACH_TIME = 1200;
-const APPROACH_RADIUS = 150;
-const SLIDER_TOLERANCE = 64;
-const PERFECT_WINDOW = 80;
-const GOOD_WINDOW = 150;
-const BAD_WINDOW = 230;
-const PINCH_MEMORY = 260;
+const APPROACH_RADIUS = 175;
+const SLIDER_TOLERANCE = 96;
+const PERFECT_WINDOW = 120;
+const GOOD_WINDOW = 240;
+const BAD_WINDOW = 380;
+const PINCH_MEMORY = 460;
 const PINCH_START_RATIO = 0.38;
 const PINCH_RELEASE_RATIO = 0.52;
 const PINCH_MAX_START_DISTANCE = 34;
 const CALIBRATION_STEP_TIME = 1200;
+const CALIBRATION_PINCH_RATIO = 0.72;
 
 let notes = [];
 let gameState = "ready";
@@ -224,6 +225,14 @@ function updateCalibration() {
     return;
   }
 
+  const openRatio = median(openCalibrationRatios);
+  const isRealCalibrationPinch = primaryHand.pinchRatio < openRatio * CALIBRATION_PINCH_RATIO;
+  if (!isRealCalibrationPinch) {
+    calibrationPhaseStartedAt = millis();
+    pinchCalibrationRatios = [];
+    return;
+  }
+
   pinchCalibrationRatios.push(primaryHand.pinchRatio);
   if (millis() - calibrationPhaseStartedAt >= CALIBRATION_STEP_TIME) {
     applyPinchCalibration();
@@ -274,7 +283,7 @@ function updateTapLike(note, gameTime) {
   if (abs(gameTime - note.time) <= BAD_WINDOW) {
     if (note.type === "tap") {
       const pinchedHand = handInputs.find((hand) => {
-        return hand.justPinched && isInsideTarget(hand.cursor, note.targets[0], 1.22);
+        return hand.justPinched && isInsideTarget(hand.cursor, note.targets[0], 1.45);
       });
       if (pinchedHand) {
         judgeNote(note, abs(gameTime - note.time));
@@ -302,7 +311,7 @@ function updateSlider(note, gameTime) {
 
   if (!note.started && abs(gameTime - note.time) <= BAD_WINDOW) {
     const starter = handInputs.find((hand) => {
-      return hand.justPinched && isInsideTarget(hand.cursor, startPoint, 1.25);
+      return hand.justPinched && isInsideTarget(hand.cursor, startPoint, 1.45);
     });
     if (starter) {
       note.started = true;
@@ -346,8 +355,8 @@ function matchDualTargets(note, gameTime) {
       if (i === j) continue;
       const first = candidates[i].hand.cursor;
       const second = candidates[j].hand.cursor;
-      const firstFits = isInsideTarget(first, note.targets[0], 1.28) && isInsideTarget(second, note.targets[1], 1.28);
-      const swappedFits = isInsideTarget(first, note.targets[1], 1.28) && isInsideTarget(second, note.targets[0], 1.28);
+      const firstFits = isInsideTarget(first, note.targets[0], 1.48) && isInsideTarget(second, note.targets[1], 1.48);
+      const swappedFits = isInsideTarget(first, note.targets[1], 1.48) && isInsideTarget(second, note.targets[0], 1.48);
       if (firstFits || swappedFits) return true;
     }
   }
