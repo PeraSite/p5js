@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "songs": [
+    {
+      "id": "game-over",
+      "title": "GAME OVER ?",
+      "artist": "HANRORO",
+      "mapper": "Rarry",
+      "version": "HATE",
+      "modeLabel": "osu!standard",
+      "chart": "assets/songs/game-over/chart.json",
+      "audio": "assets/songs/game-over/audio.mp3",
+      "cover": "assets/songs/game-over/background.png"
+    },
+    {
+      "id": "mirror",
+      "title": "MIRROR",
+      "artist": "HANRORO",
+      "mapper": "iPhone 10",
+      "version": "SHAKING",
+      "modeLabel": "osu!standard",
+      "chart": "assets/songs/mirror/chart.json",
+      "audio": "assets/songs/mirror/audio.ogg",
+      "cover": "assets/songs/mirror/background.jpg"
+    },
+    {
+      "id": "attitude",
+      "title": "ATTITUDE",
+      "artist": "IVE",
+      "mapper": "KyZzo",
+      "version": "Normal",
+      "modeLabel": "osu!standard",
+      "chart": "assets/songs/attitude/chart.json",
+      "audio": "assets/songs/attitude/audio.ogg",
+      "cover": "assets/songs/attitude/background.jpg"
+    }
+  ]
+}
