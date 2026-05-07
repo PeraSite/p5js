@@ -1,34 +1,36 @@
-# Lift Mania
+# Catch the Fruit
 
-This project is a two-hand camera rhythm game for osu!mania maps.
-The player rests each index finger in the bottom wait zone, then lifts the correct finger upward when a falling note reaches the hit line.
+This project is a two-index-finger camera rhythm game inspired by osu!catch.
+Fruit falls from the top on beat timings, and the player catches it by moving a bottom basket character under the fruit.
+Only the x coordinates of the index fingertips matter; fingertip y coordinates are ignored.
 
 ## Language
 
-**Lane**:
-One vertical falling-note track owned by a hand.
-_Avoid_: wheel sector, radial slice
+**Fruit**:
+A falling object generated from chart timing.
+_Avoid_: note block, key
 
-**Wait zone**:
-The bottom area where a resting finger should stay before a note is due.
-_Avoid_: off center, button
+**Basket**:
+The bottom catcher controlled by the two index fingertip x positions.
+_Avoid_: lane button, wait zone
 
-**Lift input**:
-The frame where an index finger leaves the wait zone upward.
-_Avoid_: hover, hold position
+**Finger x**:
+The mirrored camera-space x coordinate of an index fingertip.
+_Avoid_: lift input, y position
 
-**Playable chord**:
-A set of simultaneous notes that requires no more than one lane per hand.
-_Avoid_: raw chord, impossible chord
+**Catch line**:
+The fixed bottom y position where fruit is judged.
+_Avoid_: hit button, wait line
 
 **Falling approach**:
-The visual movement of a note from the top of a lane down into the hit line.
+The visual movement of fruit from the top of the screen down into the catch line.
 _Avoid_: radial approach
 
 ## Relationships
 
-- An 8K mania lane maps to exactly one hand and one lane.
-- The left hand owns lanes 1-4; the right hand owns lanes 5-8.
-- A tap note is hit only when the correct index finger lifts upward out of the wait zone during the timing window.
-- A hold note starts with a lift input, then passes while the same finger stays in the matching lane above the wait zone.
-- The importer removes extra same-hand simultaneous notes to keep every chord playable with two index fingers.
+- Chart timing controls when fruit reaches the catch line.
+- Chart lane data only influences fruit x placement across the screen.
+- The two detected index fingertips are sorted left to right and mapped to two separate bottom baskets.
+- If fruit reaches the catch line while its x position is inside either basket, score and combo increase.
+- Map selection chooses between harder two-basket fruit charts with different basket widths, timing windows, and fall speeds.
+- If no hand is detected, mouse and arrow-key fallback input moves a test basket.

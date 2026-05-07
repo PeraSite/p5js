@@ -1,67 +1,54 @@
 let handPose;
 let video;
 let hands = [];
-let chart;
 let easyChart;
+let hardChart;
 let song;
 let backgroundImage;
 let songs = [];
 let selectedSongIndex = 0;
-let activeSong = null;
-let activeSound = null;
-let activeBackground = null;
-let notes = [];
+let activeMap = null;
+
+let fruits = [];
+let splashes = [];
 let gameState = "loading";
 let countdownStartedAt = 0;
 let gameStartedAt = 0;
 let score = 0;
 let combo = 0;
 let maxCombo = 0;
-let judged = 0;
-let hitScore = 0;
+let caught = 0;
+let missed = 0;
 let lastJudge = null;
 let lastJudgeAt = 0;
-let hitBursts = [];
+let fallbackCenterX = 0;
+let smoothedBasketXs = null;
 
-const CHART_PATH = "assets/mania/chart.json";
 const EASY_CHART_PATH = "assets/mania/pretender-easy.json";
-const APPROACH_TIME = 2400;
-const PERFECT_WINDOW = 110;
-const GOOD_WINDOW = 220;
-const MISS_WINDOW = 330;
-const HOLD_PASS_RATIO = 0.42;
-const CURSOR_SMOOTHING = 0.36;
-const NOTE_HEIGHT = 26;
-const NOTE_RADIUS = 7;
-const WAIT_ZONE_MIN_HEIGHT = 132;
-const WAIT_ZONE_RATIO = 0.2;
-const LIFT_TRIGGER_MARGIN = 14;
-const LIFT_MIN_SPEED = 5.5;
-const LANE_MAP = [
-  { hand: "left", sector: 0, label: "1" },
-  { hand: "left", sector: 1, label: "2" },
-  { hand: "left", sector: 2, label: "3" },
-  { hand: "left", sector: 3, label: "4" },
-  { hand: "right", sector: 0, label: "5" },
-  { hand: "right", sector: 1, label: "6" },
-  { hand: "right", sector: 2, label: "7" },
-  { hand: "right", sector: 3, label: "8" },
+const HARD_CHART_PATH = "assets/mania/chart.json";
+const AUDIO_PATH = "assets/mania/audio.mp3";
+const BACKGROUND_PATH = "assets/mania/background.jpg";
+const DEFAULT_APPROACH_TIME = 1700;
+const DEFAULT_CATCH_WINDOW = 95;
+const CATCHER_Y_RATIO = 0.86;
+const FINGER_Y_OFFSET = 52;
+const DEFAULT_BASKET_WIDTH = 86;
+const FALLBACK_BASKET_GAP = 172;
+const FINGER_SMOOTHING = 0.34;
+const FALLBACK_SPEED = 8;
+const FRUIT_PALETTE = [
+  { kind: "pear", body: [145, 233, 86], accent: [224, 255, 154], stem: [113, 78, 31] },
+  { kind: "apple", body: [255, 79, 91], accent: [255, 171, 151], stem: [101, 68, 32] },
+  { kind: "orange", body: [255, 163, 58], accent: [255, 221, 113], stem: [91, 137, 61] },
+  { kind: "grape", body: [157, 105, 247], accent: [211, 180, 255], stem: [90, 147, 84] },
+  { kind: "berry", body: [75, 168, 255], accent: [173, 226, 255], stem: [80, 145, 89] },
 ];
-const HAND_RGB = {
-  left: [85, 245, 255],
-  right: [255, 226, 68],
-};
-
-let smoothedHands = {
-  left: null,
-  right: null,
-};
 
 function preload() {
-  chart = loadJSON(CHART_PATH);
   easyChart = loadJSON(EASY_CHART_PATH);
-  song = loadSound("assets/mania/audio.mp3");
-  backgroundImage = loadImage("assets/mania/background.jpg");
+  hardChart = loadJSON(HARD_CHART_PATH);
+  song = loadSound(AUDIO_PATH);
+  backgroundImage = loadImage(BACKGROUND_PATH);
   if (shouldLoadHandPose()) {
     handPose = ml5.handPose({ maxHands: 2 });
   }
@@ -70,30 +57,25 @@ function preload() {
 function setup() {
   createCanvas(windowWidth, windowHeight);
   textFont("Arial");
+  fallbackCenterX = width / 2;
+
   video = createCapture(VIDEO);
   video.size(640, 480);
   video.hide();
   startHandTracking();
   buildSongList();
-  activeSong = selectedSong();
-  activeSound = song;
-  activeBackground = backgroundImage;
+  activeMap = selectedSong();
+
   gameState = "select";
 }
 
 function draw() {
-  drawCameraBackground();
-  const playfield = getPlayfield();
-  const inputs = readHandInputs(playfield);
-
-  if (gameState === "loading") {
-    drawLoading();
-    return;
-  }
+  drawBackground();
+  const catcher = readCatcher();
 
   if (gameState === "select") {
+    drawCatcher(catcher);
     drawSongSelect();
-    drawCursors(inputs);
     return;
   }
 
@@ -102,10 +84,16 @@ function draw() {
   }
 
   if (gameState === "playing") {
-    updateGame(getGameTime(), inputs);
+    updateGame(getGameTime(), catcher);
   }
 
-  drawGame(playfield, inputs, getGameTime());
+  drawFruits(getGameTime());
+  drawSplashes();
+  drawCatcher(catcher);
+  drawHud();
+
+  if (gameState === "countdown") drawCountdown();
+  if (gameState === "finished") drawFinished();
 }
 
 function gotHands(results) {
@@ -140,17 +128,17 @@ function keyPressed() {
   if (gameState === "select") {
     if (keyCode === LEFT_ARROW || keyCode === UP_ARROW) selectSongOffset(-1);
     if (keyCode === RIGHT_ARROW || keyCode === DOWN_ARROW) selectSongOffset(1);
-    if (key === " " || keyCode === ENTER) beginSelectedSong();
+    if (key === " " || keyCode === ENTER) beginGame();
+    return false;
+  }
+
+  if (key === " " || keyCode === ENTER) {
+    if (gameState === "finished") beginGame();
     return false;
   }
 
   if (key === "r" || key === "R") {
-    beginSelectedSong();
-    return false;
-  }
-
-  if ((key === " " || keyCode === ENTER) && gameState === "finished") {
-    beginSelectedSong();
+    beginGame();
     return false;
   }
 
@@ -162,277 +150,372 @@ function keyPressed() {
 }
 
 function mousePressed() {
-  if (gameState !== "select") return;
+  if (gameState === "select") {
+    const index = songIndexAt(mouseX, mouseY);
+    if (index !== -1) {
+      selectedSongIndex = index;
+      activeMap = selectedSong();
+      return;
+    }
 
-  const index = songIndexAt(mouseX, mouseY);
-  if (index !== -1) {
-    selectedSongIndex = index;
-    activeSong = selectedSong();
+    if (pointInRect(mouseX, mouseY, startPromptRect())) beginGame();
     return;
   }
 
-  if (pointInRect(mouseX, mouseY, startPromptRect())) {
-    beginSelectedSong();
+  if (gameState === "finished") {
+    beginGame();
   }
 }
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
+  fallbackCenterX = constrain(fallbackCenterX, 0, width);
 }
 
-function buildSongList() {
-  songs = [
-    {
-      id: "pretender-easy",
-      title: "Pretender",
-      artist: easyChart.artist || "Official髭男dism",
-      version: easyChart.version || "pretender-easy",
-      modeLabel: "8K easy hand chart",
-      mapper: "Codex easy edit",
-      noteCount: easyChart.noteCount || (easyChart.notes || []).length,
-      chartData: easyChart,
-      sound: song,
-      backgroundImage,
-    },
-    {
-      id: "pretender-original",
-      title: "Pretender",
-      artist: chart.artist || "Official髭男dism",
-      version: chart.version || "Goodbye,",
-      modeLabel: "Original import",
-      mapper: chart.creator || "osu!mania import",
-      noteCount: chart.noteCount || (chart.notes || []).length,
-      chartData: chart,
-      sound: song,
-      backgroundImage,
-    },
-  ];
-}
-
-function selectedSong() {
-  return songs[selectedSongIndex] || null;
-}
-
-function selectSongOffset(offset) {
-  if (songs.length === 0) return;
-  selectedSongIndex = (selectedSongIndex + offset + songs.length) % songs.length;
-  activeSong = selectedSong();
-}
-
-function beginSelectedSong() {
-  const selected = selectedSong();
-  if (!selected) return;
-  activeSong = selected;
-  activeSound = selected.sound;
-  activeBackground = selected.backgroundImage;
-  chart = selected.chartData;
+function beginGame() {
   userStartAudio();
-  stopSong();
-  if (activeSound) {
-    activeSound.playMode("restart");
-    activeSound.play();
-    activeSound.pause();
-  }
-  startCountdown();
-}
-
-function startCountdown() {
+  activeMap = selectedSong();
   resetGame();
   stopSong();
   countdownStartedAt = millis();
   gameState = "countdown";
 }
 
+function buildSongList() {
+  songs = [
+    {
+      id: "pretender-fruit-hard",
+      title: easyChart?.title || "Pretender",
+      artist: easyChart?.artist || "Official HIGE DANdism",
+      version: "Fruit Hard",
+      modeLabel: "2 baskets / dense jumps",
+      noteCount: easyChart?.noteCount || (easyChart?.notes || []).length,
+      chartData: easyChart,
+      approachTime: 1650,
+      catchWindow: 96,
+      basketWidth: 86,
+      density: 0.82,
+      chaos: 0.45,
+    },
+    {
+      id: "pretender-fruit-insane",
+      title: hardChart?.title || "Pretender",
+      artist: hardChart?.artist || "Official HIGE DANdism",
+      version: "Fruit Insane",
+      modeLabel: "2 baskets / very fast streams",
+      noteCount: hardChart?.noteCount || (hardChart?.notes || []).length,
+      chartData: hardChart,
+      approachTime: 1280,
+      catchWindow: 72,
+      basketWidth: 72,
+      density: 1,
+      chaos: 0.78,
+    },
+  ];
+}
+
+function selectedSong() {
+  return songs[selectedSongIndex] || songs[0] || null;
+}
+
+function selectSongOffset(offset) {
+  if (songs.length === 0) return;
+  selectedSongIndex = (selectedSongIndex + offset + songs.length) % songs.length;
+  activeMap = selectedSong();
+}
+
+function resetGame() {
+  fruits = buildFruitChart();
+  splashes = [];
+  score = 0;
+  combo = 0;
+  maxCombo = 0;
+  caught = 0;
+  missed = 0;
+  lastJudge = null;
+  lastJudgeAt = 0;
+}
+
+function buildFruitChart() {
+  const mapInfo = activeMap || selectedSong();
+  const sourceNotes = Array.isArray(mapInfo?.chartData?.notes) ? mapInfo.chartData.notes : [];
+  const safeLeft = 74;
+  const safeRight = max(safeLeft + 1, width - 74);
+  const playableWidth = safeRight - safeLeft;
+
+  if (sourceNotes.length === 0) {
+    return Array.from({ length: 64 }, (_, index) => makeFruit(index * 520 + 1000, index, safeLeft, playableWidth));
+  }
+
+  let lastTime = -9999;
+  const minSpacing = mapInfo?.density >= 1 ? 28 : 58;
+  const built = sourceNotes
+    .filter((note) => {
+      const tooClose = note.time - lastTime < minSpacing;
+      if (!tooClose) lastTime = note.time;
+      return !tooClose;
+    })
+    .map((note, index) => {
+      const lane = Number.isFinite(note.lane) ? note.lane : index % 8;
+      const mirroredLane = index % 5 === 0 ? 7 - lane : lane;
+      const laneProgress = (mirroredLane + 0.5) / 8;
+      const chaos = mapInfo?.chaos || 0.5;
+      const wobble = sin(index * 2.47) * 0.055 + cos(index * 0.91) * chaos * 0.065;
+      const snap = index % 11 === 0 ? (index % 22 === 0 ? 0.03 : 0.97) : laneProgress + wobble;
+      return {
+        ...fruitSkin(index),
+        id: index,
+        time: note.time,
+        x: safeLeft + constrain(snap, 0.025, 0.975) * playableWidth,
+        lane: mirroredLane,
+        radius: randomFruitRadius(index),
+        spin: random(-0.45, 0.45),
+        judged: false,
+        hit: false,
+      };
+    });
+
+  return addDifficultyFruit(built, safeLeft, playableWidth, mapInfo);
+}
+
+function addDifficultyFruit(baseFruits, safeLeft, playableWidth, mapInfo) {
+  const extras = [];
+  const chaos = mapInfo?.chaos || 0.5;
+
+  baseFruits.forEach((fruit, index) => {
+    if (index % 7 === 3) {
+      const sideProgress = fruit.x < width / 2 ? 0.88 : 0.12;
+      extras.push(makeExtraFruit(fruit.time + 96, index, safeLeft + sideProgress * playableWidth));
+    }
+
+    if (chaos > 0.7 && index % 9 === 4) {
+      const jumpProgress = index % 18 === 4 ? 0.06 : 0.94;
+      extras.push(makeExtraFruit(fruit.time + 48, index + 5000, safeLeft + jumpProgress * playableWidth));
+    }
+  });
+
+  return [...baseFruits, ...extras].sort((a, b) => a.time - b.time);
+}
+
+function makeExtraFruit(time, index, x) {
+  return {
+    ...fruitSkin(index + 2),
+    id: `extra-${index}`,
+    time,
+    x,
+    lane: index % 8,
+    radius: max(15, randomFruitRadius(index) - 3),
+    spin: random(-0.65, 0.65),
+    judged: false,
+    hit: false,
+  };
+}
+
+function makeFruit(time, index, safeLeft, playableWidth) {
+  const progress = (sin(index * 2.2) + 1) * 0.5;
+  return {
+    ...fruitSkin(index),
+    id: index,
+    time,
+    x: safeLeft + progress * playableWidth,
+    lane: index % 8,
+    radius: randomFruitRadius(index),
+    spin: random(-0.45, 0.45),
+    judged: false,
+    hit: false,
+  };
+}
+
+function fruitSkin(index) {
+  return FRUIT_PALETTE[index % FRUIT_PALETTE.length];
+}
+
+function randomFruitRadius(index) {
+  return 18 + (index % 4) * 2.5;
+}
+
 function startPlaying() {
   gameState = "playing";
   gameStartedAt = millis();
   stopSong();
-  if (activeSound) {
-    activeSound.playMode("restart");
-    activeSound.play();
+  if (song) {
+    song.playMode("restart");
+    song.play();
   }
 }
 
 function stopSong() {
-  if (activeSound && activeSound.isPlaying()) activeSound.stop();
-  if (song && song !== activeSound && song.isPlaying()) song.stop();
-}
-
-function resetGame() {
-  notes = (chart.notes || []).map((note) => ({
-    ...note,
-    hit: false,
-    missed: false,
-    holding: false,
-    completed: false,
-    holdFrames: 0,
-    heldFrames: 0,
-  }));
-  score = 0;
-  combo = 0;
-  maxCombo = 0;
-  judged = 0;
-  hitScore = 0;
-  lastJudge = null;
-  lastJudgeAt = 0;
-  hitBursts = [];
+  if (song && song.isPlaying()) song.stop();
 }
 
 function getGameTime() {
   if (gameState !== "playing") return 0;
-  if (activeSound && !activeSound.isPlaying()) activeSound.play();
-  return activeSound ? activeSound.currentTime() * 1000 : millis() - gameStartedAt;
+  return song ? song.currentTime() * 1000 : millis() - gameStartedAt;
 }
 
-function updateGame(gameTime, inputs) {
-  for (const note of notes) {
-    if (note.completed || note.missed) continue;
-
-    const isHold = note.endTime > note.time + 80;
-    if (isHold) {
-      updateHold(note, gameTime, inputs);
-    } else {
-      updateTap(note, gameTime, inputs);
+function updateGame(gameTime, catcher) {
+  const windowMs = catchWindow();
+  for (const fruit of fruits) {
+    if (fruit.judged) continue;
+    if (abs(gameTime - fruit.time) <= windowMs && catcherCoversFruit(catcher, fruit)) {
+      catchFruit(fruit, catcher);
+    } else if (gameTime > fruit.time + windowMs) {
+      missFruit(fruit);
     }
   }
 
-  const lastNote = notes[notes.length - 1];
-  const finishTime = lastNote ? max(lastNote.endTime, lastNote.time) + 1800 : 0;
-  if (gameTime > finishTime && gameState === "playing") {
+  const lastFruit = fruits[fruits.length - 1];
+  if (lastFruit && gameTime > lastFruit.time + 1800 && gameState === "playing") {
     stopSong();
     gameState = "finished";
   }
 }
 
-function updateTap(note, gameTime, inputs) {
-  if (abs(gameTime - note.time) <= MISS_WINDOW && fingerMatches(note, inputs, true)) {
-    judgeNote(note, abs(gameTime - note.time), false);
-    return;
-  }
-
-  if (gameTime > note.time + MISS_WINDOW) missNote(note);
+function catcherCoversFruit(catcher, fruit) {
+  const padding = 18;
+  return catcher.baskets.some(
+    (basket) => fruit.x >= basket.left - padding && fruit.x <= basket.right + padding
+  );
 }
 
-function updateHold(note, gameTime, inputs) {
-  if (!note.holding) {
-    if (abs(gameTime - note.time) <= MISS_WINDOW && fingerMatches(note, inputs, true)) {
-      note.holding = true;
-      judgeNote(note, abs(gameTime - note.time), true);
-    } else if (gameTime > note.time + MISS_WINDOW) {
-      missNote(note);
-    }
-    return;
-  }
-
-  if (gameTime >= note.time && gameTime <= note.endTime) {
-    note.holdFrames += 1;
-    if (fingerMatches(note, inputs, false)) note.heldFrames += 1;
-  }
-
-  if (gameTime > note.endTime) {
-    const ratio = note.holdFrames === 0 ? 1 : note.heldFrames / note.holdFrames;
-    if (ratio >= HOLD_PASS_RATIO) {
-      note.completed = true;
-      score += 120;
-      showJudge("HOLD", color(130, 230, 255));
-    } else {
-      missNote(note, "DROP");
-    }
-  }
-}
-
-function judgeNote(note, delta, isHold) {
-  note.hit = true;
-  if (!isHold) note.completed = true;
-
-  let label = "GOOD";
-  let accuracy = 0.72;
-  let addScore = isHold ? 180 : 240;
-  let judgeColor = color(255, 210, 120);
-
-  if (delta <= PERFECT_WINDOW) {
-    label = "PERFECT";
-    accuracy = 1;
-    addScore = isHold ? 280 : 360;
-    judgeColor = color(105, 245, 255);
-  } else if (delta > GOOD_WINDOW) {
-    label = "OK";
-    accuracy = 0.45;
-    addScore = isHold ? 90 : 140;
-    judgeColor = color(255, 165, 100);
-  }
-
-  judged += 1;
-  hitScore += accuracy;
-  score += addScore + combo * 4;
+function catchFruit(fruit, catcher) {
+  fruit.judged = true;
+  fruit.hit = true;
+  caught += 1;
   combo += 1;
   maxCombo = max(maxCombo, combo);
-  addHitBurst(note);
-  showJudge(label, judgeColor);
+  score += 300 + combo * 8;
+  showJudge("CATCH", color(118, 245, 255));
+  addSplash(fruit.x, catcher.y - 18, fruit.body, true);
 }
 
-function missNote(note, label = "MISS") {
-  note.missed = true;
-  note.completed = true;
-  judged += 1;
+function missFruit(fruit) {
+  fruit.judged = true;
+  missed += 1;
   combo = 0;
-  showJudge(label, color(255, 95, 95));
+  showJudge("MISS", color(255, 96, 100));
+  addSplash(fruit.x, catchLineY() + 12, fruit.body, false);
 }
 
-function fingerMatches(note, inputs, requireLift) {
-  const lane = noteLane(note);
-  const input = inputs[lane.hand];
-  return input && input.zone === lane.sector && (!requireLift || input.lifted);
+function addSplash(x, y, rgb, success) {
+  const particles = Array.from({ length: success ? 14 : 8 }, (_, index) => ({
+    angle: map(index, 0, success ? 13 : 7, -PI, 0) + random(-0.28, 0.28),
+    speed: random(success ? 3.2 : 1.4, success ? 8.4 : 4.2),
+    size: random(success ? 4 : 3, success ? 9 : 6),
+  }));
+  splashes.push({ x, y, rgb, success, particles, createdAt: millis() });
 }
 
-function readHandInputs(playfield) {
+function readCatcher() {
+  updateFallbackInput();
+
   const points = hands
     .map((hand) => keypoint(hand, 8, "index_finger_tip"))
     .filter(Boolean)
     .map(mirroredPoint)
-    .sort((a, b) => a.x - b.x);
+    .map((point) => point.x)
+    .sort((a, b) => a - b);
 
-  const assigned = { left: null, right: null };
-  if (points.length === 1) {
-    assigned[points[0].x < width / 2 ? "left" : "right"] = points[0];
-  } else if (points.length >= 2) {
-    assigned.left = points[0];
-    assigned.right = points[points.length - 1];
+  let rawLeftX;
+  let rawRightX;
+  let detectedLeft = false;
+  let detectedRight = false;
+
+  if (points.length >= 2) {
+    rawLeftX = points[0];
+    rawRightX = points[points.length - 1];
+    detectedLeft = true;
+    detectedRight = true;
+  } else if (points.length === 1) {
+    const side = points[0] < width / 2 ? "left" : "right";
+    rawLeftX = side === "left" ? points[0] : fallbackCenterX - FALLBACK_BASKET_GAP * 0.5;
+    rawRightX = side === "right" ? points[0] : fallbackCenterX + FALLBACK_BASKET_GAP * 0.5;
+    detectedLeft = side === "left";
+    detectedRight = side === "right";
+  } else {
+    rawLeftX = fallbackCenterX - FALLBACK_BASKET_GAP * 0.5;
+    rawRightX = fallbackCenterX + FALLBACK_BASKET_GAP * 0.5;
   }
 
+  const target = keepBasketCentersApart({
+    left: constrain(rawLeftX, basketWidth() * 0.5 + 12, width - basketWidth() * 0.5 - 12),
+    right: constrain(rawRightX, basketWidth() * 0.5 + 12, width - basketWidth() * 0.5 - 12),
+  });
+
+  if (!smoothedBasketXs) {
+    smoothedBasketXs = target;
+  } else {
+    smoothedBasketXs = {
+      left: lerp(smoothedBasketXs.left, target.left, FINGER_SMOOTHING),
+      right: lerp(smoothedBasketXs.right, target.right, FINGER_SMOOTHING),
+    };
+  }
+
+  smoothedBasketXs = keepBasketCentersApart(smoothedBasketXs);
+
+  const y = catchLineY();
+  const baskets = [
+    makeBasket("left", smoothedBasketXs.left, y, detectedLeft),
+    makeBasket("right", smoothedBasketXs.right, y, detectedRight),
+  ];
+
   return {
-    left: makeHandInput("left", assigned.left, playfield.left),
-    right: makeHandInput("right", assigned.right, playfield.right),
+    baskets,
+    x: (baskets[0].x + baskets[1].x) * 0.5,
+    y,
+    usingHands: detectedLeft || detectedRight,
+    detectedFingers: points.length,
   };
 }
 
-function makeHandInput(hand, point, field) {
-  if (!point) {
-    smoothedHands[hand] = null;
-    return null;
+function keepBasketCentersApart(centers) {
+  let left = min(centers.left, centers.right);
+  let right = max(centers.left, centers.right);
+  const widthNow = basketWidth();
+  const minGap = widthNow * 0.82;
+
+  if (right - left < minGap) {
+    const center = (left + right) * 0.5;
+    left = center - minGap * 0.5;
+    right = center + minGap * 0.5;
   }
 
-  const previous = smoothedHands[hand];
-  const cursor = previous
-    ? {
-        x: lerp(previous.x, point.x, CURSOR_SMOOTHING),
-        y: lerp(previous.y, point.y, CURSOR_SMOOTHING),
-      }
-    : point;
+  return {
+    left: constrain(left, widthNow * 0.5 + 12, width - widthNow * 0.5 - 12),
+    right: constrain(right, widthNow * 0.5 + 12, width - widthNow * 0.5 - 12),
+  };
+}
 
-  const laneProgress = constrain((cursor.x - field.x) / field.w, 0, 0.999);
-  const zone = floor(laneProgress * 4);
-  const waiting = cursor.y >= field.waitTop;
-  const lifted =
-    previous &&
-    previous.waiting &&
-    cursor.y < field.waitTop - LIFT_TRIGGER_MARGIN &&
-    previous.y - cursor.y >= LIFT_MIN_SPEED;
-  const state = waiting ? "waiting" : lifted ? "lift" : "active";
+function makeBasket(hand, x, y, detected) {
+  const widthNow = basketWidth();
+  return {
+    hand,
+    x,
+    y,
+    width: widthNow,
+    left: x - widthNow * 0.5,
+    right: x + widthNow * 0.5,
+    detected,
+  };
+}
 
-  const input = { x: cursor.x, y: cursor.y, cursor, zone, state, waiting, lifted };
-  smoothedHands[hand] = input;
-  return input;
+function approachTime() {
+  return activeMap?.approachTime || DEFAULT_APPROACH_TIME;
+}
+
+function catchWindow() {
+  return activeMap?.catchWindow || DEFAULT_CATCH_WINDOW;
+}
+
+function basketWidth() {
+  return activeMap?.basketWidth || DEFAULT_BASKET_WIDTH;
+}
+
+function updateFallbackInput() {
+  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) fallbackCenterX -= FALLBACK_SPEED;
+  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) fallbackCenterX += FALLBACK_SPEED;
+  if (mouseIsPressed || movedX !== 0) fallbackCenterX = mouseX;
+  fallbackCenterX = constrain(fallbackCenterX, 50, width - 50);
 }
 
 function keypoint(hand, fallbackIndex, name) {
@@ -448,61 +531,20 @@ function mirroredPoint(point) {
   };
 }
 
-function getPlayfield() {
-  const top = 86;
-  const bottom = height - 28;
-  const marginX = max(18, width * 0.045);
-  const gap = max(18, width * 0.022);
-  const usableWidth = width - marginX * 2 - gap;
-  const handWidth = usableWidth * 0.5;
-  const waitHeight = max(WAIT_ZONE_MIN_HEIGHT, height * WAIT_ZONE_RATIO);
-  const waitTop = max(top + 230, bottom - waitHeight);
-  const base = {
-    y: top,
-    h: bottom - top,
-    hitY: waitTop,
-    waitTop,
-    bottom,
-    laneCount: 4,
-    laneW: handWidth / 4,
-  };
-
-  return {
-    left: {
-      ...base,
-      x: marginX,
-      w: handWidth,
-      label: "LEFT",
-    },
-    right: {
-      ...base,
-      x: marginX + handWidth + gap,
-      w: handWidth,
-      label: "RIGHT",
-    },
-    gap,
-  };
+function catchLineY() {
+  return height * CATCHER_Y_RATIO;
 }
 
-function drawGame(playfield, inputs, gameTime) {
-  drawHud(gameTime);
-  drawPlayfield(playfield, inputs);
-  if (gameState === "playing") {
-    drawActiveNotes(playfield, gameTime);
-    drawHitBursts(playfield);
-  }
-  drawCursors(inputs);
-
-  if (gameState === "countdown") drawCountdown();
-  if (gameState === "finished") drawFinished();
+function fruitY(fruit, gameTime) {
+  const approach = approachTime();
+  const progress = (gameTime - (fruit.time - approach)) / approach;
+  return lerp(-80, catchLineY(), constrain(progress, 0, 1.18));
 }
 
-function drawCameraBackground() {
-  background(5, 6, 8);
-
-  const selectedBackground = gameState === "select" ? selectedSong()?.backgroundImage : activeBackground;
-  if (selectedBackground) {
-    drawCoverImage(selectedBackground, 0, 0, width, height);
+function drawBackground() {
+  background(3, 5, 8);
+  if (backgroundImage) {
+    drawCoverImage(backgroundImage, 0, 0, width, height);
   } else if (video && video.loadedmetadata) {
     const rect = videoRect();
     push();
@@ -512,268 +554,259 @@ function drawCameraBackground() {
     pop();
   }
 
-  if (gameState !== "select" && video && video.loadedmetadata) {
+  if (video && video.loadedmetadata) {
     const rect = videoRect();
     push();
     translate(rect.x + rect.w, rect.y);
     scale(-1, 1);
-    tint(255, 56);
+    tint(255, 34);
     image(video, 0, 0, rect.w, rect.h);
     noTint();
     pop();
   }
 
   noStroke();
-  fill(0, 0, 0, gameState === "select" ? 118 : 96);
+  fill(0, 0, 0, 178);
   rect(0, 0, width, height);
+
+  drawStageLines();
 }
 
-function drawHud(gameTime) {
-  const accuracy = judged === 0 ? 100 : (hitScore / judged) * 100;
-  noStroke();
-  fill(0, 0, 0, 120);
-  rect(0, 0, width, 70);
-
-  fill(255);
-  textAlign(LEFT, CENTER);
-  textStyle(BOLD);
-  textSize(18);
-  const hudSong = activeSong || selectedSong();
-  text(`${hudSong?.title || chart.title} - ${hudSong?.artist || chart.artist}`, 24, 23);
-  textStyle(NORMAL);
-  textSize(13);
-  fill(255, 255, 255, 160);
-  text(`${hudSong?.version || chart.version} / ${hudSong?.noteCount || chart.noteCount} playable notes`, 24, 48);
-
-  textAlign(RIGHT, CENTER);
-  textStyle(BOLD);
-  textSize(22);
-  fill(105, 245, 255);
-  text(nf(score, 1, 0), width - 24, 22);
-  textStyle(NORMAL);
-  textSize(14);
-  fill(255, 255, 255, 180);
-  text(`Combo ${combo}   Acc ${nf(constrain(accuracy, 0, 100), 2, 1)}%`, width - 24, 49);
-
-  if (lastJudge && millis() - lastJudgeAt < 650) {
-    textAlign(CENTER, CENTER);
-    textStyle(BOLD);
-    textSize(32);
-    fill(lastJudge.color);
-    text(lastJudge.label, width / 2, 98);
-  }
-}
-
-function drawPlayfield(playfield, inputs) {
-  drawHandField("left", playfield.left, inputs.left);
-  drawHandField("right", playfield.right, inputs.right);
-
-  stroke(255, 255, 255, 36);
-  strokeWeight(2);
-  line(width / 2, 86, width / 2, height - 28);
-}
-
-function drawHandField(hand, field, input) {
-  noStroke();
-  fill(4, 7, 10, 112);
-  rect(field.x, field.y, field.w, field.h, 8);
-
-  const activeZone = input ? input.zone : null;
-  for (let sector = 0; sector < field.laneCount; sector += 1) {
-    const x = laneX(field, sector);
-    const pressure = upcomingPressure(hand, sector);
-    const active = activeZone === sector;
-    const laneAlpha = active ? 82 : 28 + pressure * 62;
-
-    noStroke();
-    fill(handColor(hand, laneAlpha));
-    rect(x + 2, field.y, field.laneW - 4, field.hitY - field.y, 6);
-
-    stroke(255, 255, 255, 32);
-    strokeWeight(1);
-    line(x, field.y, x, field.bottom);
-
-    noStroke();
-    fill(handColor(hand, active ? 245 : 195));
-    textAlign(CENTER, CENTER);
-    textStyle(BOLD);
-    textSize(16);
-    text(laneFor(hand, sector), x + field.laneW * 0.5, field.bottom - 31);
-  }
-
-  stroke(255, 255, 255, 48);
+function drawStageLines() {
+  const catchY = catchLineY();
+  stroke(255, 255, 255, 22);
   strokeWeight(1);
-  line(field.x + field.w, field.y, field.x + field.w, field.bottom);
-
-  noStroke();
-  fill(0, 0, 0, 156);
-  rect(field.x, field.waitTop, field.w, field.bottom - field.waitTop, 0, 0, 8, 8);
-
-  const ready = input && input.waiting;
-  fill(handColor(hand, ready ? 78 : 38));
-  rect(field.x + 2, field.waitTop + 2, field.w - 4, field.bottom - field.waitTop - 4, 0, 0, 7, 7);
-
-  stroke(ready ? handColor(hand, 250) : color(255, 255, 255, 190));
-  strokeWeight(ready ? 4 : 3);
-  line(field.x, field.hitY, field.x + field.w, field.hitY);
-
-  for (let sector = 0; sector < field.laneCount; sector += 1) {
-    const x = laneX(field, sector);
-    const active = activeZone === sector;
-    noStroke();
-    fill(handColor(hand, active ? 245 : 195));
-    textAlign(CENTER, CENTER);
-    textStyle(BOLD);
-    textSize(16);
-    text(laneFor(hand, sector), x + field.laneW * 0.5, field.bottom - 31);
+  for (let i = 0; i < 8; i += 1) {
+    const x = map(i + 0.5, 0, 8, 74, width - 74);
+    line(x, 86, x, catchY + 22);
   }
 
+  stroke(255, 255, 255, 80);
+  strokeWeight(2);
+  line(34, catchY, width - 34, catchY);
+
   noStroke();
-  fill(handColor(hand, 205));
-  textAlign(LEFT, CENTER);
-  textStyle(BOLD);
-  textSize(12);
-  text(field.label, field.x + 10, field.y + 18);
+  fill(255, 255, 255, 34);
+  rect(34, catchY - 2, width - 68, 4, 4);
 }
 
-function drawActiveNotes(playfield, gameTime) {
-  for (const note of notes) {
-    if (note.completed || note.missed) continue;
-    if (gameTime < note.time - APPROACH_TIME || gameTime > note.endTime + MISS_WINDOW) continue;
+function drawFruits(gameTime) {
+  const approach = approachTime();
+  for (const fruit of fruits) {
+    if (fruit.judged && fruit.hit) continue;
+    if (gameTime < fruit.time - approach || gameTime > fruit.time + 650) continue;
 
-    const lane = noteLane(note);
-    const field = playfield[lane.hand];
-    const progress = constrain((gameTime - (note.time - APPROACH_TIME)) / APPROACH_TIME, 0, 1.18);
-    const y = noteY(field, progress);
-    const alpha = gameTime > note.time ? map(gameTime - note.time, 0, MISS_WINDOW, 255, 80, true) : 255;
-
-    if (note.endTime > note.time + 80) drawHoldTail(field, lane.sector, note, gameTime, lane.hand, y);
-    drawFallingNote(field, lane.sector, y, lane.hand, alpha, note.hit);
+    const y = fruit.judged ? catchLineY() + 24 : fruitY(fruit, gameTime);
+    const alpha = fruit.judged ? 90 : 255;
+    drawFruit(fruit, fruit.x, y, alpha);
   }
 }
 
-function drawHoldTail(field, sector, note, gameTime, hand, headY) {
-  const distance = field.hitY - field.y;
-  const durationRatio = (note.endTime - note.time) / APPROACH_TIME;
-  const tailY = headY - distance * durationRatio;
-  const x = laneCenterX(field, sector);
-  const w = field.laneW * 0.42;
-  const topY = constrain(tailY, field.y - 80, field.hitY);
-  const bottomY = constrain(headY, field.y, field.hitY);
-
-  noStroke();
-  fill(0, 0, 0, note.holding ? 128 : 88);
-  rect(x - w * 0.5 - 4, topY, w + 8, max(8, bottomY - topY), 6);
-  fill(handColor(hand, note.holding ? 108 : 62));
-  rect(x - w * 0.5, topY, w, max(8, bottomY - topY), 5);
-}
-
-function drawFallingNote(field, sector, y, hand, alpha, hit) {
-  const x = laneX(field, sector) + field.laneW * 0.12;
-  const w = field.laneW * 0.76;
-  const h = NOTE_HEIGHT;
-
+function drawFruit(fruit, x, y, alpha) {
   push();
-  drawingContext.shadowBlur = 13;
-  drawingContext.shadowColor = handShadow(hand, 0.32);
-  noStroke();
-  fill(0, 0, 0, alpha * 0.76);
-  rect(x - 4, y - h * 0.5 - 4, w + 8, h + 8, NOTE_RADIUS + 4);
+  translate(x, y);
+  rotate(sin(frameCount * 0.03 + fruit.id) * 0.18 + fruit.spin);
+  drawingContext.shadowBlur = 18;
+  drawingContext.shadowColor = `rgba(${fruit.body[0]},${fruit.body[1]},${fruit.body[2]},0.45)`;
+
+  if (fruit.kind === "grape") {
+    drawGrapes(fruit, alpha);
+  } else {
+    drawRoundFruit(fruit, alpha);
+  }
+
   drawingContext.shadowBlur = 0;
-  fill(handColor(hand, hit ? alpha * 0.42 : alpha));
-  rect(x, y - h * 0.5, w, h, NOTE_RADIUS);
-  fill(255, 255, 255, alpha * 0.78);
-  rect(x + w * 0.17, y - 2, w * 0.66, 4, 3);
   pop();
 }
 
-function drawCursors(inputs) {
-  for (const hand of ["left", "right"]) {
-    const input = inputs[hand];
-    if (!input) continue;
-    const active = input.state === "lift" || input.state === "active";
-    const cursorColor = input.state === "lift" ? color(255) : active ? handColor(hand) : handColor(hand, 190);
-    push();
-    noFill();
-    stroke(cursorColor);
-    strokeWeight(3);
-    circle(input.cursor.x, input.cursor.y, input.state === "lift" ? 42 : active ? 36 : 30);
-    stroke(0, 0, 0, 170);
-    strokeWeight(5);
-    point(input.cursor.x, input.cursor.y);
-    stroke(255, 255, 255, 220);
-    strokeWeight(2);
-    line(input.cursor.x - 18, input.cursor.y, input.cursor.x + 18, input.cursor.y);
-    line(input.cursor.x, input.cursor.y - 18, input.cursor.x, input.cursor.y + 18);
-    noStroke();
-    fill(0, 0, 0, 160);
-    rectMode(CENTER);
-    rect(input.cursor.x, input.cursor.y - 30, 92, 22, 6);
-    fill(cursorColor);
+function drawRoundFruit(fruit, alpha) {
+  const r = fruit.radius;
+  noStroke();
+  fill(fruit.body[0], fruit.body[1], fruit.body[2], alpha);
+  ellipse(0, 2, r * 1.55, r * 1.78);
+  fill(fruit.accent[0], fruit.accent[1], fruit.accent[2], alpha * 0.84);
+  ellipse(-r * 0.28, -r * 0.27, r * 0.54, r * 0.42);
+
+  stroke(fruit.stem[0], fruit.stem[1], fruit.stem[2], alpha);
+  strokeWeight(4);
+  line(0, -r * 0.72, r * 0.18, -r * 1.08);
+
+  noStroke();
+  fill(88, 215, 105, alpha);
+  ellipse(r * 0.34, -r * 0.9, r * 0.62, r * 0.28);
+}
+
+function drawGrapes(fruit, alpha) {
+  const r = fruit.radius * 0.38;
+  noStroke();
+  for (let row = 0; row < 3; row += 1) {
+    for (let col = 0; col < 3 - row; col += 1) {
+      const x = (col - (2 - row) * 0.5) * r * 1.8;
+      const y = row * r * 1.45;
+      fill(fruit.body[0], fruit.body[1], fruit.body[2], alpha);
+      circle(x, y, r * 1.75);
+      fill(fruit.accent[0], fruit.accent[1], fruit.accent[2], alpha * 0.76);
+      circle(x - r * 0.25, y - r * 0.22, r * 0.52);
+    }
+  }
+
+  stroke(fruit.stem[0], fruit.stem[1], fruit.stem[2], alpha);
+  strokeWeight(3);
+  line(0, -r * 0.7, r * 0.6, -r * 1.8);
+}
+
+function drawSplashes() {
+  const now = millis();
+  splashes = splashes.filter((splash) => now - splash.createdAt < 520);
+
+  for (const splash of splashes) {
+    const p = constrain((now - splash.createdAt) / 520, 0, 1);
+    const alpha = map(p, 0, 1, 220, 0);
+    for (const particle of splash.particles) {
+      const d = particle.speed * p * 18;
+      const x = splash.x + cos(particle.angle) * d;
+      const y = splash.y + sin(particle.angle) * d + p * p * 34;
+      noStroke();
+      fill(splash.rgb[0], splash.rgb[1], splash.rgb[2], alpha);
+      circle(x, y, particle.size * (1 - p * 0.35));
+    }
+  }
+}
+
+function drawCatcher(catcher) {
+  for (const basket of catcher.baskets) {
+    drawBasket(basket);
+    drawFinger(basket.x, basket.y + FINGER_Y_OFFSET, basket.hand, basket.detected);
+    drawCharacter(basket.x, basket.y + 70, basket.hand);
+  }
+}
+
+function drawBasket(basket) {
+  const y = basket.y + 6;
+  const left = basket.left - 12;
+  const right = basket.right + 12;
+  const w = right - left;
+
+  push();
+  drawingContext.shadowBlur = 24;
+  drawingContext.shadowColor =
+    basket.hand === "left" ? "rgba(118,245,255,0.32)" : "rgba(255,209,102,0.32)";
+  noStroke();
+  fill(0, 0, 0, 188);
+  ellipse(basket.x, y + 20, w + 18, 32);
+  fill(221, 250, 255, 246);
+  ellipse(basket.x, y, w, 26);
+  fill(basket.hand === "left" ? color(97, 206, 255, 232) : color(255, 197, 76, 232));
+  ellipse(basket.x, y - 3, w * 0.9, 13);
+  fill(5, 12, 20, 235);
+  ellipse(basket.x, y - 4, max(42, w * 0.78), 8);
+
+  stroke(255, 255, 255, 210);
+  strokeWeight(3);
+  line(left + 16, y - 10, right - 16, y - 10);
+  pop();
+}
+
+function drawFinger(x, y, side, usingHands) {
+  const flip = side === "left" ? -1 : 1;
+  push();
+  translate(x, y);
+  scale(flip, 1);
+  noStroke();
+  fill(usingHands ? color(255, 226, 190) : color(125, 158, 178));
+  rect(-12, -36, 24, 64, 13);
+  circle(0, -38, 24);
+  fill(255, 245, 230, usingHands ? 230 : 105);
+  ellipse(-4, -44, 8, 5);
+  fill(0, 0, 0, 120);
+  rect(-16, 20, 32, 16, 8);
+  pop();
+}
+
+function drawCharacter(x, y, hand) {
+  push();
+  translate(x, y);
+  noStroke();
+  fill(0, 0, 0, 150);
+  ellipse(0, 48, 88, 22);
+
+  fill(23, 35, 54);
+  rect(-29, -6, 58, 64, 21);
+  fill(255, 224, 194);
+  ellipse(0, -4, 54, 58);
+  fill(24, 36, 58);
+  arc(0, -15, 66, 58, PI, TWO_PI);
+  triangle(-32, -16, -18, 22, -2, -16);
+  triangle(32, -16, 18, 22, 2, -16);
+  fill(hand === "left" ? color(88, 202, 255) : color(255, 202, 88));
+  circle(-12, -2, 7);
+  circle(12, -2, 7);
+  fill(255, 145, 170, 170);
+  ellipse(0, 15, 20, 7);
+  pop();
+}
+
+function drawHud() {
+  const total = caught + missed;
+  const accuracy = total === 0 ? 100 : (caught / total) * 100;
+
+  noStroke();
+  fill(0, 0, 0, 156);
+  rect(0, 0, width, 76);
+
+  textAlign(LEFT, CENTER);
+  textStyle(BOLD);
+  fill(255);
+  textSize(18);
+  text("Catch the Fruit", 24, 23);
+  textStyle(NORMAL);
+  fill(255, 255, 255, 170);
+  textSize(13);
+  text("Index-finger x only. Keep the basket under falling fruit.", 24, 49);
+
+  textAlign(RIGHT, CENTER);
+  textStyle(BOLD);
+  fill(255);
+  textSize(28);
+  text(nf(score, 6, 0), width - 24, 24);
+  textStyle(NORMAL);
+  fill(255, 255, 255, 180);
+  textSize(14);
+  text(`Combo ${combo}   Catch ${caught}/${total}   ${nf(accuracy, 2, 1)}%`, width - 24, 52);
+
+  if (lastJudge && millis() - lastJudgeAt < 620) {
     textAlign(CENTER, CENTER);
     textStyle(BOLD);
-    textSize(11);
-    text(`${hand.toUpperCase()} ${laneFor(hand, input.zone)}`, input.cursor.x, input.cursor.y - 31);
-    pop();
+    textSize(34);
+    fill(lastJudge.color);
+    text(lastJudge.label, width / 2, 106);
   }
-}
-
-function drawHitBursts(playfield) {
-  const now = millis();
-  hitBursts = hitBursts.filter((burst) => now - burst.createdAt < 300);
-  for (const burst of hitBursts) {
-    const age = now - burst.createdAt;
-    const p = constrain(age / 300, 0, 1);
-    const lane = noteLane(burst);
-    const field = playfield[lane.hand];
-    const pos = { x: laneCenterX(field, lane.sector), y: field.hitY };
-    noFill();
-    stroke(handColor(lane.hand, map(p, 0, 1, 160, 0)));
-    strokeWeight(3);
-    rect(pos.x - lerp(18, field.laneW * 0.42, p), pos.y - lerp(12, 34, p), lerp(36, field.laneW * 0.84, p), lerp(24, 68, p), 8);
-  }
-}
-
-function drawLoading() {
-  drawScrim();
-  textAlign(CENTER, CENTER);
-  noStroke();
-  fill(255);
-  textStyle(BOLD);
-  textSize(min(width * 0.06, 62));
-  text("LOADING", width / 2, height * 0.42);
-  textStyle(NORMAL);
-  textSize(18);
-  fill(255, 255, 255, 205);
-  text("Preparing maps", width / 2, height * 0.5);
 }
 
 function drawSongSelect() {
   const selected = selectedSong();
   if (!selected) return;
 
-  noStroke();
-  fill(0, 0, 0, 72);
-  rect(0, 0, width, height);
+  drawScrim(104);
 
   const panelX = width * 0.07;
-  const panelY = height * 0.12;
-  const panelW = min(width * 0.52, 720);
+  const panelY = height * 0.14;
+  const panelW = min(width * 0.48, 680);
 
   textAlign(LEFT, TOP);
-  textStyle(BOLD);
+  noStroke();
   fill(255);
-  textSize(clamp(width * 0.052, 42, 76));
-  text(selected.title, panelX, panelY, panelW, 92);
-
+  textStyle(BOLD);
+  textSize(clamp(width * 0.052, 38, 74));
+  text("Catch the Fruit", panelX, panelY, panelW, 86);
   textStyle(NORMAL);
-  fill(255, 255, 255, 218);
-  textSize(22);
-  text(selected.artist, panelX, panelY + 98);
+  fill(255, 255, 255, 206);
+  textSize(18);
+  text("Two independent baskets. Only each index finger's x position matters.", panelX, panelY + 96, panelW, 48);
 
-  textSize(14);
-  fill(255, 255, 255, 165);
-  text(`${selected.version} / ${selected.modeLabel} / ${selected.noteCount} notes`, panelX, panelY + 132);
+  fill(255, 255, 255, 155);
+  textSize(13);
+  text(`Selected: ${selected.version} / ${selected.modeLabel} / ${selected.noteCount} source notes`, panelX, panelY + 154, panelW, 24);
 
   const rail = songRailLayout();
   for (let i = 0; i < songs.length; i += 1) {
@@ -788,55 +821,54 @@ function drawSongTile(index, x, y, w, h) {
   const selected = index === selectedSongIndex;
   const hover = mouseX >= x && mouseX <= x + w && mouseY >= y && mouseY <= y + h;
 
-  if (item.backgroundImage) drawCoverImage(item.backgroundImage, x, y, w, h);
   noStroke();
-  fill(selected ? color(8, 18, 26, 90) : color(0, 0, 0, hover ? 112 : 156));
+  fill(selected ? color(7, 20, 28, 218) : color(0, 0, 0, hover ? 176 : 136));
   rect(x, y, w, h, 8);
 
   if (selected) {
-    stroke(105, 245, 255, 235);
+    stroke(118, 245, 255, 235);
     strokeWeight(3);
     noFill();
     rect(x + 1.5, y + 1.5, w - 3, h - 3, 8);
   }
 
   noStroke();
-  fill(selected ? color(105, 245, 255) : color(255));
+  fill(selected ? color(118, 245, 255) : color(255));
   textAlign(LEFT, TOP);
   textStyle(BOLD);
   textSize(18);
-  text(item.title, x + 18, y + 17, w - 36, 24);
+  text(item.version, x + 18, y + 16, w - 36, 24);
 
+  fill(255, 255, 255, 184);
   textStyle(NORMAL);
   textSize(13);
-  fill(255, 255, 255, 178);
-  text(`${item.artist}  ${item.version}`, x + 18, y + 45, w - 36, 18);
+  text(`${item.title} - ${item.artist}`, x + 18, y + 43, w - 36, 18);
 
-  fill(255, 255, 255, 132);
-  text(item.modeLabel, x + 18, y + h - 28);
+  fill(255, 255, 255, 138);
+  text(`${item.modeLabel} / basket ${item.basketWidth}px / window ${item.catchWindow}ms`, x + 18, y + h - 29, w - 36, 18);
 }
 
 function drawStartPrompt() {
   const prompt = startPromptRect();
-  fill(0, 0, 0, 128);
   noStroke();
+  fill(0, 0, 0, 162);
   rect(prompt.x, prompt.y, prompt.w, prompt.h, 8);
 
-  fill(105, 245, 255);
+  fill(118, 245, 255);
   textAlign(LEFT, TOP);
   textStyle(BOLD);
   textSize(18);
-  text("Space / Enter to select", prompt.x + 22, prompt.y + 17);
+  text("Space / Enter to start", prompt.x + 22, prompt.y + 16);
 
-  fill(255, 255, 255, 165);
+  fill(255, 255, 255, 158);
   textStyle(NORMAL);
   textSize(13);
-  text("Starts after 3 2 1 countdown", prompt.x + 22, prompt.y + 44);
+  text("Arrow keys choose map. Mouse or A/D can test fallback baskets.", prompt.x + 22, prompt.y + 44);
 }
 
 function songRailLayout() {
-  const w = min(420, width * 0.34);
-  const h = 90;
+  const w = min(460, width * 0.36);
+  const h = 92;
   return {
     x: width - w - width * 0.07,
     y: height * 0.16,
@@ -858,9 +890,9 @@ function songIndexAt(x, y) {
 function startPromptRect() {
   return {
     x: width * 0.07,
-    y: height - 118,
-    w: min(520, width * 0.7),
-    h: 74,
+    y: height - 120,
+    w: min(560, width * 0.7),
+    h: 76,
   };
 }
 
@@ -870,7 +902,7 @@ function pointInRect(x, y, rectInfo) {
 
 function drawCountdown() {
   const left = max(1, 3 - floor((millis() - countdownStartedAt) / 1000));
-  drawScrim();
+  drawScrim(112);
   textAlign(CENTER, CENTER);
   textStyle(BOLD);
   textSize(min(width, height) * 0.16);
@@ -879,95 +911,34 @@ function drawCountdown() {
 }
 
 function drawFinished() {
-  const accuracy = judged === 0 ? 100 : (hitScore / judged) * 100;
-  drawScrim();
+  const total = caught + missed;
+  const accuracy = total === 0 ? 100 : (caught / total) * 100;
+  drawScrim(154);
   textAlign(CENTER, CENTER);
   noStroke();
   fill(255);
   textStyle(BOLD);
   textSize(56);
-  text("FINISH", width / 2, height * 0.36);
+  text("FINISH", width / 2, height * 0.35);
   textStyle(NORMAL);
   textSize(24);
   text(`Score ${nf(score, 1, 0)}`, width / 2, height * 0.45);
-  text(`Accuracy ${nf(constrain(accuracy, 0, 100), 2, 1)}%`, width / 2, height * 0.5);
-  text(`Max Combo ${maxCombo}`, width / 2, height * 0.55);
+  text(`Caught ${caught}/${total}   ${nf(accuracy, 2, 1)}%`, width / 2, height * 0.51);
+  text(`Max Combo ${maxCombo}`, width / 2, height * 0.57);
   textSize(16);
   fill(255, 255, 255, 175);
-  text("Press R to replay", width / 2, height * 0.63);
+  text("Press R to replay", width / 2, height * 0.65);
 }
 
-function drawScrim() {
+function drawScrim(alpha) {
   noStroke();
-  fill(0, 0, 0, 142);
+  fill(0, 0, 0, alpha);
   rect(0, 0, width, height);
-}
-
-function addHitBurst(note) {
-  hitBursts.push({
-    lane: note.lane,
-    hand: note.hand,
-    sector: note.sector,
-    createdAt: millis(),
-  });
 }
 
 function showJudge(label, judgeColor) {
   lastJudge = { label, color: judgeColor };
   lastJudgeAt = millis();
-}
-
-function upcomingPressure(hand, sector) {
-  if (gameState !== "playing") return 0;
-  const gameTime = getGameTime();
-  let pressure = 0;
-  for (const note of notes) {
-    if (note.completed || note.missed) continue;
-    const lane = noteLane(note);
-    if (lane.hand !== hand || lane.sector !== sector) continue;
-    const until = note.time - gameTime;
-    if (until < 0 || until > APPROACH_TIME) continue;
-    pressure = max(pressure, 1 - until / APPROACH_TIME);
-  }
-  return pressure;
-}
-
-function laneFor(hand, sector) {
-  const index = LANE_MAP.findIndex((lane) => lane.hand === hand && lane.sector === sector);
-  return index === -1 ? "" : LANE_MAP[index].label;
-}
-
-function noteLane(note) {
-  if (note && note.hand && Number.isFinite(note.sector)) {
-    return { hand: note.hand, sector: note.sector };
-  }
-  return LANE_MAP[note?.lane] || LANE_MAP[0];
-}
-
-function laneX(field, sector) {
-  return field.x + sector * field.laneW;
-}
-
-function laneCenterX(field, sector) {
-  return laneX(field, sector) + field.laneW * 0.5;
-}
-
-function noteY(field, progress) {
-  return lerp(field.y - NOTE_HEIGHT, field.hitY, constrain(progress, 0, 1.18));
-}
-
-function handColor(hand, alpha = 255) {
-  const rgb = HAND_RGB[hand];
-  return color(rgb[0], rgb[1], rgb[2], alpha);
-}
-
-function handShadow(hand, alpha) {
-  const rgb = HAND_RGB[hand];
-  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
-}
-
-function clamp(value, minValue, maxValue) {
-  return Math.max(minValue, Math.min(maxValue, value));
 }
 
 function videoRect() {
@@ -1007,4 +978,8 @@ function drawCoverImage(img, x, y, w, h) {
   }
 
   image(img, sx, sy, sw, sh, x, y, w, h);
+}
+
+function clamp(value, minValue, maxValue) {
+  return Math.max(minValue, Math.min(maxValue, value));
 }
