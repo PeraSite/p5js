@@ -1,39 +1,12 @@
 let handPose;
 let video;
 let hands = [];
-let handInputs = [];
-let previousPinches = [];
-
-const MANIFEST_PATH = "assets/songs/index.json";
-const NOTE_RADIUS = 76;
-const APPROACH_TIME = 1380;
-const APPROACH_RADIUS = 240;
-const SLIDER_TRACK_WIDTH = 132;
-const SLIDER_TRACK_BORDER = 6;
-const SLIDER_TOLERANCE = 146;
-const PERFECT_WINDOW = 170;
-const GOOD_WINDOW = 320;
-const BAD_WINDOW = 520;
-const PINCH_MEMORY = 680;
-const PINCH_START_RATIO = 0.46;
-const PINCH_RELEASE_RATIO = 0.64;
-const PINCH_MAX_START_DISTANCE = 50;
-const TAP_HIT_MULTIPLIER = 1.95;
-const DUAL_HIT_MULTIPLIER = 2.0;
-const SLIDER_START_MULTIPLIER = 1.95;
-const PINCH_IMPACT_DURATION = 240;
-const CALIBRATION_STEP_TIME = 1200;
-const CALIBRATION_PINCH_RATIO = 0.72;
-const LANES = {
-  left: { x0: 0.08, x1: 0.42, label: "LEFT" },
-  right: { x0: 0.58, x1: 0.92, label: "RIGHT" },
-};
-
+let chart;
+let easyChart;
+let song;
+let backgroundImage;
 let songs = [];
 let selectedSongIndex = 0;
-let loadingMessage = "Loading songs";
-let loadingError = null;
-let pendingPinchStart = false;
 let activeSong = null;
 let activeSound = null;
 let activeBackground = null;
@@ -44,20 +17,54 @@ let gameStartedAt = 0;
 let score = 0;
 let combo = 0;
 let maxCombo = 0;
-let earnedAccuracyScore = 0;
-let judgedAccuracyMax = 0;
+let judged = 0;
+let hitScore = 0;
 let lastJudge = null;
 let lastJudgeAt = 0;
-let calibrationPhaseStartedAt = 0;
-let openCalibrationRatios = [];
-let pinchCalibrationRatios = [];
-let calibratedPinchStartRatio = PINCH_START_RATIO;
-let calibratedPinchReleaseRatio = PINCH_RELEASE_RATIO;
-let hitEffects = [];
-let pinchEffects = [];
+let hitBursts = [];
+
+const CHART_PATH = "assets/mania/chart.json";
+const EASY_CHART_PATH = "assets/mania/pretender-easy.json";
+const APPROACH_TIME = 2400;
+const PERFECT_WINDOW = 110;
+const GOOD_WINDOW = 220;
+const MISS_WINDOW = 330;
+const HOLD_PASS_RATIO = 0.42;
+const CURSOR_SMOOTHING = 0.36;
+const NOTE_HEIGHT = 26;
+const NOTE_RADIUS = 7;
+const WAIT_ZONE_MIN_HEIGHT = 132;
+const WAIT_ZONE_RATIO = 0.2;
+const LIFT_TRIGGER_MARGIN = 14;
+const LIFT_MIN_SPEED = 5.5;
+const LANE_MAP = [
+  { hand: "left", sector: 0, label: "1" },
+  { hand: "left", sector: 1, label: "2" },
+  { hand: "left", sector: 2, label: "3" },
+  { hand: "left", sector: 3, label: "4" },
+  { hand: "right", sector: 0, label: "5" },
+  { hand: "right", sector: 1, label: "6" },
+  { hand: "right", sector: 2, label: "7" },
+  { hand: "right", sector: 3, label: "8" },
+];
+const HAND_RGB = {
+  left: [85, 245, 255],
+  right: [255, 226, 68],
+};
+
+let smoothedHands = {
+  left: null,
+  right: null,
+};
 
 function preload() {
-  handPose = ml5.handPose({ maxHands: 2 });
+  chart = loadJSON(CHART_PATH);
+  easyChart = loadJSON(EASY_CHART_PATH);
+  song = loadSound("assets/mania/audio.mp3");
+  backgroundImage = loadImage("assets/mania/background.jpg");
+  if (shouldLoadHandPose()) {
+    handPose = ml5.handPose({ maxHands: 2 });
+  }
 }
 
 function setup() {
@@ -66,149 +73,92 @@ function setup() {
   video = createCapture(VIDEO);
   video.size(640, 480);
   video.hide();
-  handPose.detectStart(video, gotHands);
-  loadSongManifest();
+  startHandTracking();
+  buildSongList();
+  activeSong = selectedSong();
+  activeSound = song;
+  activeBackground = backgroundImage;
+  gameState = "select";
 }
 
 function draw() {
-  drawSceneBackground();
-  handInputs = readHandInputs();
+  drawCameraBackground();
+  const playfield = getPlayfield();
+  const inputs = readHandInputs(playfield);
 
   if (gameState === "loading") {
     drawLoading();
-  } else if (gameState === "select") {
-    updateSongSelect();
-    drawSongSelect();
-  } else {
-    if (gameState === "calibrateOpen" || gameState === "calibratePinch") {
-      updateCalibration();
-    }
-
-    if (gameState === "countdown" && millis() - countdownStartedAt >= 3000) {
-      startPlaying();
-    }
-
-    const gameTime = getGameTime();
-    if (gameState === "playing") {
-      updateGame(gameTime);
-    }
-
-    drawGame(gameTime);
-  }
-
-  drawCursors();
-  drawPinchImpactEffects();
-  drawPinchDebug();
-  previousPinches = handInputs.map((hand) => hand.pinching);
-}
-
-async function loadSongManifest() {
-  try {
-    const response = await fetch(MANIFEST_PATH);
-    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-    const manifest = await response.json();
-    songs = (manifest.songs || []).map((song) => ({
-      ...song,
-      backgroundImage: null,
-      chartData: null,
-      sound: null,
-      loading: false,
-      loadingPromise: null,
-    }));
-
-    if (songs.length === 0) throw new Error("No songs in manifest");
-    gameState = "select";
-    loadSongAssets(songs[0], { sound: false, chart: false });
-    for (const song of songs.slice(1)) {
-      loadSongAssets(song, { sound: false, chart: false });
-    }
-  } catch (error) {
-    loadingError = error.message;
-  }
-}
-
-async function loadSongAssets(song, options = {}) {
-  const loadSoundFile = options.sound !== false;
-  const loadChart = options.chart !== false;
-
-  if (!song) return;
-  if (song.loadingPromise) await song.loadingPromise;
-
-  const needsBackground = !song.backgroundImage && song.cover;
-  const needsChart = loadChart && !song.chartData;
-  const needsSound = loadSoundFile && !song.sound;
-  if (!needsBackground && !needsChart && !needsSound) return;
-
-  song.loading = true;
-  song.loadingPromise = (async () => {
-    if (!song.backgroundImage && song.cover) {
-      song.backgroundImage = await loadImageAsync(song.cover);
-    }
-    if (loadChart && !song.chartData) {
-      const response = await fetch(song.chart);
-      if (!response.ok) throw new Error(`${song.id} chart ${response.status}`);
-      song.chartData = await response.json();
-    }
-    if (loadSoundFile && !song.sound) {
-      song.sound = await loadSoundAsync(song.audio);
-    }
-  })();
-
-  try {
-    await song.loadingPromise;
-  } catch (error) {
-    song.error = error.message;
-    loadingError = error.message;
-  } finally {
-    song.loading = false;
-    song.loadingPromise = null;
-  }
-}
-
-function loadImageAsync(src) {
-  return new Promise((resolve, reject) => {
-    loadImage(src, resolve, () => reject(new Error(`Could not load ${src}`)));
-  });
-}
-
-function loadSoundAsync(src) {
-  return new Promise((resolve, reject) => {
-    loadSound(src, resolve, () => reject(new Error(`Could not load ${src}`)));
-  });
-}
-
-function updateSongSelect() {
-  if (songs.length === 0) return;
-
-  const pinchStart = handInputs.some((hand) => hand.justPinched);
-  if (pinchStart && !pendingPinchStart) {
-    beginSelectedSong();
-  }
-}
-
-async function beginSelectedSong() {
-  const song = selectedSong();
-  if (!song) return;
-
-  pendingPinchStart = true;
-  loadingMessage = `Preparing ${song.title}`;
-  await loadSongAssets(song, { sound: true, chart: true });
-  pendingPinchStart = false;
-
-  if (song.error || !song.chartData || !song.sound) {
-    loadingError = song.error || "Song failed to load";
-    gameState = "select";
     return;
   }
 
-  activeSong = song;
-  activeSound = song.sound;
-  activeBackground = song.backgroundImage;
-  startCalibration();
+  if (gameState === "select") {
+    drawSongSelect();
+    drawCursors(inputs);
+    return;
+  }
+
+  if (gameState === "countdown" && millis() - countdownStartedAt >= 3000) {
+    startPlaying();
+  }
+
+  if (gameState === "playing") {
+    updateGame(getGameTime(), inputs);
+  }
+
+  drawGame(playfield, inputs, getGameTime());
 }
 
-function selectedSong() {
-  return songs[selectedSongIndex] || null;
+function gotHands(results) {
+  hands = results;
+}
+
+function startHandTracking() {
+  if (!handPose) return;
+  handPose.detectStart(video, gotHands);
+}
+
+function shouldLoadHandPose() {
+  if (navigator.webdriver) {
+    console.warn("Hand tracking skipped in automated browser verification");
+    return false;
+  }
+
+  if (!hasWebGlSupport()) {
+    console.warn("Hand tracking skipped because WebGL is unavailable");
+    return false;
+  }
+
+  return true;
+}
+
+function hasWebGlSupport() {
+  const canvas = document.createElement("canvas");
+  return Boolean(canvas.getContext("webgl2") || canvas.getContext("webgl"));
+}
+
+function keyPressed() {
+  if (gameState === "select") {
+    if (keyCode === LEFT_ARROW || keyCode === UP_ARROW) selectSongOffset(-1);
+    if (keyCode === RIGHT_ARROW || keyCode === DOWN_ARROW) selectSongOffset(1);
+    if (key === " " || keyCode === ENTER) beginSelectedSong();
+    return false;
+  }
+
+  if (key === "r" || key === "R") {
+    beginSelectedSong();
+    return false;
+  }
+
+  if ((key === " " || keyCode === ENTER) && gameState === "finished") {
+    beginSelectedSong();
+    return false;
+  }
+
+  if (key === "Escape") {
+    stopSong();
+    gameState = "select";
+    return false;
+  }
 }
 
 function mousePressed() {
@@ -217,520 +167,671 @@ function mousePressed() {
   const index = songIndexAt(mouseX, mouseY);
   if (index !== -1) {
     selectedSongIndex = index;
-  }
-}
-
-function keyPressed() {
-  if (gameState === "select") {
-    if (keyCode === LEFT_ARROW || keyCode === UP_ARROW) selectSongOffset(-1);
-    if (keyCode === RIGHT_ARROW || keyCode === DOWN_ARROW) selectSongOffset(1);
-    if (key === " ") beginSelectedSong();
+    activeSong = selectedSong();
     return;
   }
 
-  if (key === "Escape") {
-    stopActiveSound();
-    gameState = "select";
-    return;
+  if (pointInRect(mouseX, mouseY, startPromptRect())) {
+    beginSelectedSong();
   }
-
-  if (key === "r" || key === "R") {
-    resetGame();
-    startCalibration();
-  }
-}
-
-function selectSongOffset(offset) {
-  if (songs.length === 0) return;
-  selectedSongIndex = (selectedSongIndex + offset + songs.length) % songs.length;
-  loadSongAssets(selectedSong(), { sound: false, chart: false });
 }
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
 }
 
-function gotHands(results) {
-  hands = results;
+function buildSongList() {
+  songs = [
+    {
+      id: "pretender-easy",
+      title: "Pretender",
+      artist: easyChart.artist || "Official髭男dism",
+      version: easyChart.version || "pretender-easy",
+      modeLabel: "8K easy hand chart",
+      mapper: "Codex easy edit",
+      noteCount: easyChart.noteCount || (easyChart.notes || []).length,
+      chartData: easyChart,
+      sound: song,
+      backgroundImage,
+    },
+    {
+      id: "pretender-original",
+      title: "Pretender",
+      artist: chart.artist || "Official髭男dism",
+      version: chart.version || "Goodbye,",
+      modeLabel: "Original import",
+      mapper: chart.creator || "osu!mania import",
+      noteCount: chart.noteCount || (chart.notes || []).length,
+      chartData: chart,
+      sound: song,
+      backgroundImage,
+    },
+  ];
+}
+
+function selectedSong() {
+  return songs[selectedSongIndex] || null;
+}
+
+function selectSongOffset(offset) {
+  if (songs.length === 0) return;
+  selectedSongIndex = (selectedSongIndex + offset + songs.length) % songs.length;
+  activeSong = selectedSong();
+}
+
+function beginSelectedSong() {
+  const selected = selectedSong();
+  if (!selected) return;
+  activeSong = selected;
+  activeSound = selected.sound;
+  activeBackground = selected.backgroundImage;
+  chart = selected.chartData;
+  userStartAudio();
+  stopSong();
+  if (activeSound) {
+    activeSound.playMode("restart");
+    activeSound.play();
+    activeSound.pause();
+  }
+  startCountdown();
 }
 
 function startCountdown() {
   resetGame();
-  gameState = "countdown";
+  stopSong();
   countdownStartedAt = millis();
-}
-
-function startCalibration() {
-  resetGame();
-  gameState = "calibrateOpen";
-  calibrationPhaseStartedAt = millis();
-  openCalibrationRatios = [];
-  pinchCalibrationRatios = [];
+  gameState = "countdown";
 }
 
 function startPlaying() {
   gameState = "playing";
   gameStartedAt = millis();
-  stopActiveSound();
-  resumeAudioContext();
+  stopSong();
   if (activeSound) {
     activeSound.playMode("restart");
     activeSound.play();
   }
 }
 
+function stopSong() {
+  if (activeSound && activeSound.isPlaying()) activeSound.stop();
+  if (song && song !== activeSound && song.isPlaying()) song.stop();
+}
+
 function resetGame() {
-  buildChart();
+  notes = (chart.notes || []).map((note) => ({
+    ...note,
+    hit: false,
+    missed: false,
+    holding: false,
+    completed: false,
+    holdFrames: 0,
+    heldFrames: 0,
+  }));
   score = 0;
   combo = 0;
   maxCombo = 0;
-  earnedAccuracyScore = 0;
-  judgedAccuracyMax = 0;
+  judged = 0;
+  hitScore = 0;
   lastJudge = null;
   lastJudgeAt = 0;
-  hitEffects = [];
-  pinchEffects = [];
-  previousPinches = [];
-}
-
-function buildChart() {
-  const sourceNotes = activeSong?.chartData?.notes || [];
-  notes = sourceNotes.map((note, index) => normalizeRuntimeNote(note, index));
-}
-
-function normalizeRuntimeNote(note, index) {
-  const base = {
-    id: note.id || `${note.type}-${note.time}-${index}`,
-    type: note.type,
-    time: note.time,
-    hit: false,
-    missed: false,
-  };
-
-  if (note.type === "slider") {
-    return {
-      ...base,
-      duration: note.duration,
-      points: note.points,
-      started: false,
-      completed: false,
-      coverage: 0,
-      frames: 0,
-      maxScore: 500,
-      accuracyMax: 500,
-    };
-  }
-
-  const targetCount = note.targets.length;
-  return {
-    ...base,
-    targets: note.targets,
-    maxScore: targetCount > 1 ? 600 : 300,
-    accuracyMax: targetCount > 1 ? 600 : 300,
-  };
-}
-
-function updateCalibration() {
-  const primaryHand = handInputs[0];
-  if (!primaryHand) {
-    calibrationPhaseStartedAt = millis();
-    return;
-  }
-
-  if (gameState === "calibrateOpen") {
-    openCalibrationRatios.push(primaryHand.pinchRatio);
-    if (millis() - calibrationPhaseStartedAt >= CALIBRATION_STEP_TIME) {
-      gameState = "calibratePinch";
-      calibrationPhaseStartedAt = millis();
-      previousPinches = [];
-    }
-    return;
-  }
-
-  const openRatio = median(openCalibrationRatios);
-  const isRealCalibrationPinch = primaryHand.pinchRatio < openRatio * CALIBRATION_PINCH_RATIO;
-  if (!isRealCalibrationPinch) {
-    calibrationPhaseStartedAt = millis();
-    pinchCalibrationRatios = [];
-    return;
-  }
-
-  pinchCalibrationRatios.push(primaryHand.pinchRatio);
-  if (millis() - calibrationPhaseStartedAt >= CALIBRATION_STEP_TIME) {
-    applyPinchCalibration();
-    startCountdown();
-  }
-}
-
-function applyPinchCalibration() {
-  const openRatio = median(openCalibrationRatios);
-  const pinchedRatio = percentile(pinchCalibrationRatios, 0.2);
-  const hasUsefulSamples = openCalibrationRatios.length > 8 && pinchCalibrationRatios.length > 8;
-  const looksLikePinch = pinchedRatio > 0 && pinchedRatio < openRatio * 0.78;
-
-  if (!hasUsefulSamples || !looksLikePinch) {
-    calibratedPinchStartRatio = PINCH_START_RATIO;
-    calibratedPinchReleaseRatio = PINCH_RELEASE_RATIO;
-    return;
-  }
-
-  calibratedPinchStartRatio = constrain(pinchedRatio + (openRatio - pinchedRatio) * 0.25, 0.24, 0.46);
-  calibratedPinchReleaseRatio = constrain(calibratedPinchStartRatio + 0.14, calibratedPinchStartRatio + 0.08, 0.62);
+  hitBursts = [];
 }
 
 function getGameTime() {
   if (gameState !== "playing") return 0;
-  if (activeSound?.isLoaded()) return activeSound.currentTime() * 1000;
-  return millis() - gameStartedAt;
+  if (activeSound && !activeSound.isPlaying()) activeSound.play();
+  return activeSound ? activeSound.currentTime() * 1000 : millis() - gameStartedAt;
 }
 
-function updateGame(gameTime) {
+function updateGame(gameTime, inputs) {
   for (const note of notes) {
-    if (note.type === "slider") {
-      updateSlider(note, gameTime);
+    if (note.completed || note.missed) continue;
+
+    const isHold = note.endTime > note.time + 80;
+    if (isHold) {
+      updateHold(note, gameTime, inputs);
     } else {
-      updateTapLike(note, gameTime);
+      updateTap(note, gameTime, inputs);
     }
   }
 
   const lastNote = notes[notes.length - 1];
-  const chartFinishAt = lastNote ? lastNote.time + (lastNote.duration || 0) + 1400 : 0;
-  const audioFinishAt = activeSound?.isLoaded() ? activeSound.duration() * 1000 + 300 : 0;
-  if (gameTime > max(chartFinishAt, audioFinishAt)) {
+  const finishTime = lastNote ? max(lastNote.endTime, lastNote.time) + 1800 : 0;
+  if (gameTime > finishTime && gameState === "playing") {
+    stopSong();
     gameState = "finished";
-    stopActiveSound();
   }
 }
 
-function updateTapLike(note, gameTime) {
-  if (note.hit || note.missed) return;
-
-  if (abs(gameTime - note.time) <= BAD_WINDOW) {
-    if (note.type === "tap") {
-      const pinchedHand = handInputs.find((hand) => {
-        return isRecentPinchForNote(hand, note, gameTime) && handMatchesTarget(hand, note.targets[0]) && isInsideTarget(hand.cursor, note.targets[0], TAP_HIT_MULTIPLIER);
-      });
-      if (pinchedHand) {
-        judgeNote(note, abs(gameTime - note.time));
-      }
-    }
-
-    if (note.type === "dual") {
-      const matched = matchDualTargets(note, gameTime);
-      if (matched) {
-        judgeNote(note, abs(gameTime - note.time));
-      }
-    }
-  }
-
-  if (gameTime > note.time + BAD_WINDOW) {
-    missNote(note);
-  }
-}
-
-function updateSlider(note, gameTime) {
-  if (note.completed || note.missed) return;
-
-  const startPoint = note.points[0];
-  const endTime = note.time + note.duration;
-
-  if (!note.started && abs(gameTime - note.time) <= BAD_WINDOW) {
-    const starter = handInputs.find((hand) => {
-      return isRecentPinchForNote(hand, note, gameTime) && handMatchesTarget(hand, startPoint) && isInsideTarget(hand.cursor, startPoint, SLIDER_START_MULTIPLIER);
-    });
-    if (starter) {
-      note.started = true;
-      showJudge("SLIDE", color(120, 230, 255));
-    }
-  }
-
-  if (!note.started && gameTime > note.time + BAD_WINDOW) {
-    missNote(note);
+function updateTap(note, gameTime, inputs) {
+  if (abs(gameTime - note.time) <= MISS_WINDOW && fingerMatches(note, inputs, true)) {
+    judgeNote(note, abs(gameTime - note.time), false);
     return;
   }
 
-  if (note.started && gameTime >= note.time && gameTime <= endTime) {
-    const progress = constrain((gameTime - note.time) / note.duration, 0, 1);
-    const pathPoint = pointOnSlider(note, progress);
-    const tracking = handInputs.some((hand) => {
-      return handMatchesTarget(hand, startPoint) && dist(hand.cursor.x, hand.cursor.y, pathPoint.x, pathPoint.y) <= SLIDER_TOLERANCE;
-    });
-    note.frames += 1;
-    if (tracking) {
-      note.coverage += 1;
+  if (gameTime > note.time + MISS_WINDOW) missNote(note);
+}
+
+function updateHold(note, gameTime, inputs) {
+  if (!note.holding) {
+    if (abs(gameTime - note.time) <= MISS_WINDOW && fingerMatches(note, inputs, true)) {
+      note.holding = true;
+      judgeNote(note, abs(gameTime - note.time), true);
+    } else if (gameTime > note.time + MISS_WINDOW) {
+      missNote(note);
+    }
+    return;
+  }
+
+  if (gameTime >= note.time && gameTime <= note.endTime) {
+    note.holdFrames += 1;
+    if (fingerMatches(note, inputs, false)) note.heldFrames += 1;
+  }
+
+  if (gameTime > note.endTime) {
+    const ratio = note.holdFrames === 0 ? 1 : note.heldFrames / note.holdFrames;
+    if (ratio >= HOLD_PASS_RATIO) {
+      note.completed = true;
+      score += 120;
+      showJudge("HOLD", color(130, 230, 255));
+    } else {
+      missNote(note, "DROP");
     }
   }
-
-  if (note.started && gameTime > endTime) {
-    completeSlider(note);
-  }
 }
 
-function matchDualTargets(note, gameTime) {
-  const candidates = handInputs
-    .map((hand, index) => ({ hand, index }))
-    .filter(({ hand }) => {
-      return hand.lastPinchAt !== null && abs(hand.lastPinchAt - note.time) <= BAD_WINDOW && gameTime - hand.lastPinchAt <= PINCH_MEMORY;
-    });
-
-  if (candidates.length < 2) return false;
-
-  for (let i = 0; i < candidates.length; i++) {
-    for (let j = 0; j < candidates.length; j++) {
-      if (i === j) continue;
-      const first = candidates[i].hand.cursor;
-      const second = candidates[j].hand.cursor;
-      const firstFits =
-        handMatchesTarget(candidates[i].hand, note.targets[0]) &&
-        handMatchesTarget(candidates[j].hand, note.targets[1]) &&
-        isInsideTarget(first, note.targets[0], DUAL_HIT_MULTIPLIER) &&
-        isInsideTarget(second, note.targets[1], DUAL_HIT_MULTIPLIER);
-      const swappedFits =
-        handMatchesTarget(candidates[i].hand, note.targets[1]) &&
-        handMatchesTarget(candidates[j].hand, note.targets[0]) &&
-        isInsideTarget(first, note.targets[1], DUAL_HIT_MULTIPLIER) &&
-        isInsideTarget(second, note.targets[0], DUAL_HIT_MULTIPLIER);
-      if (firstFits || swappedFits) return true;
-    }
-  }
-  return false;
-}
-
-function isRecentPinchForNote(hand, note, gameTime) {
-  if (hand.lastPinchAt === null) return false;
-  const activePinch = hand.justPinched || (hand.pinching && gameTime - hand.lastPinchAt <= PINCH_MEMORY);
-  return activePinch && abs(hand.lastPinchAt - note.time) <= BAD_WINDOW;
-}
-
-function judgeNote(note, delta) {
+function judgeNote(note, delta, isHold) {
   note.hit = true;
-  let label = "BAD";
-  let addScore = note.type === "dual" ? 120 : 60;
-  let accuracy = note.type === "dual" ? 120 : 60;
-  let judgeColor = color(255, 185, 90);
+  if (!isHold) note.completed = true;
+
+  let label = "GOOD";
+  let accuracy = 0.72;
+  let addScore = isHold ? 180 : 240;
+  let judgeColor = color(255, 210, 120);
 
   if (delta <= PERFECT_WINDOW) {
     label = "PERFECT";
-    addScore = note.maxScore;
-    accuracy = note.accuracyMax;
-    judgeColor = color(110, 245, 255);
-  } else if (delta <= GOOD_WINDOW) {
-    label = "GOOD";
-    addScore = note.type === "dual" ? 360 : 180;
-    accuracy = note.type === "dual" ? 360 : 180;
-    judgeColor = color(145, 255, 160);
+    accuracy = 1;
+    addScore = isHold ? 280 : 360;
+    judgeColor = color(105, 245, 255);
+  } else if (delta > GOOD_WINDOW) {
+    label = "OK";
+    accuracy = 0.45;
+    addScore = isHold ? 90 : 140;
+    judgeColor = color(255, 165, 100);
   }
 
+  judged += 1;
+  hitScore += accuracy;
   score += addScore + combo * 4;
-  earnedAccuracyScore += accuracy;
-  judgedAccuracyMax += note.accuracyMax;
   combo += 1;
   maxCombo = max(maxCombo, combo);
+  addHitBurst(note);
   showJudge(label, judgeColor);
-  addNoteEffect(note, "hit", judgeColor);
 }
 
-function missNote(note) {
+function missNote(note, label = "MISS") {
   note.missed = true;
-  judgedAccuracyMax += note.accuracyMax;
-  combo = 0;
-  showJudge("MISS", color(255, 95, 95));
-  addNoteEffect(note, "miss", color(255, 95, 95));
-}
-
-function completeSlider(note) {
   note.completed = true;
-  const ratio = note.frames === 0 ? 0 : note.coverage / note.frames;
-  judgedAccuracyMax += note.accuracyMax;
-
-  if (ratio >= 0.78) {
-    score += note.maxScore + combo * 6;
-    earnedAccuracyScore += note.accuracyMax;
-    combo += 1;
-    showJudge("PERFECT", color(110, 245, 255));
-    addSliderEndEffect(note, "hit", color(110, 245, 255));
-  } else if (ratio >= 0.55) {
-    score += 300 + combo * 4;
-    earnedAccuracyScore += 300;
-    combo += 1;
-    showJudge("GOOD", color(145, 255, 160));
-    addSliderEndEffect(note, "hit", color(145, 255, 160));
-  } else if (ratio >= 0.32) {
-    score += 120;
-    earnedAccuracyScore += 120;
-    combo = 0;
-    showJudge("BAD", color(255, 185, 90));
-    addSliderEndEffect(note, "miss", color(255, 185, 90));
-  } else {
-    combo = 0;
-    showJudge("MISS", color(255, 95, 95));
-    addSliderEndEffect(note, "miss", color(255, 95, 95));
-  }
-
-  maxCombo = max(maxCombo, combo);
+  judged += 1;
+  combo = 0;
+  showJudge(label, color(255, 95, 95));
 }
 
-function showJudge(label, judgeColor) {
-  lastJudge = { label, judgeColor };
-  lastJudgeAt = millis();
+function fingerMatches(note, inputs, requireLift) {
+  const lane = noteLane(note);
+  const input = inputs[lane.hand];
+  return input && input.zone === lane.sector && (!requireLift || input.lifted);
 }
 
-function addNoteEffect(note, type, effectColor) {
-  if (note.type === "slider") {
-    addSliderEndEffect(note, type, effectColor);
-    return;
+function readHandInputs(playfield) {
+  const points = hands
+    .map((hand) => keypoint(hand, 8, "index_finger_tip"))
+    .filter(Boolean)
+    .map(mirroredPoint)
+    .sort((a, b) => a.x - b.x);
+
+  const assigned = { left: null, right: null };
+  if (points.length === 1) {
+    assigned[points[0].x < width / 2 ? "left" : "right"] = points[0];
+  } else if (points.length >= 2) {
+    assigned.left = points[0];
+    assigned.right = points[points.length - 1];
   }
 
-  for (const target of note.targets) {
-    addEffect(screenPoint(target), type, effectColor);
-  }
+  return {
+    left: makeHandInput("left", assigned.left, playfield.left),
+    right: makeHandInput("right", assigned.right, playfield.right),
+  };
 }
 
-function addSliderEndEffect(note, type, effectColor) {
-  const point = note.started || note.completed ? pointOnSlider(note, 1) : screenPoint(note.points[0]);
-  addEffect(point, type, effectColor);
-}
-
-function addEffect(point, type, effectColor) {
-  hitEffects.push({
-    x: point.x,
-    y: point.y,
-    type,
-    effectColor,
-    createdAt: millis(),
-  });
-}
-
-function drawSceneBackground() {
-  const bg = gameState === "select" ? selectedSong()?.backgroundImage : activeBackground;
-  if (gameState === "select") {
-    drawMirroredCamera({ overlayAlpha: 70 });
-    if (bg) {
-      tint(255, 138);
-      drawCoverImage(bg, 0, 0, width, height);
-      noTint();
-      noStroke();
-      fill(3, 5, 10, 82);
-      rect(0, 0, width, height);
-    }
-    return;
+function makeHandInput(hand, point, field) {
+  if (!point) {
+    smoothedHands[hand] = null;
+    return null;
   }
 
-  if (bg) {
-    drawCoverImage(bg, 0, 0, width, height);
-    noStroke();
-    fill(3, 5, 10, 178);
-    rect(0, 0, width, height);
-  } else {
-    drawMirroredCamera();
-  }
+  const previous = smoothedHands[hand];
+  const cursor = previous
+    ? {
+        x: lerp(previous.x, point.x, CURSOR_SMOOTHING),
+        y: lerp(previous.y, point.y, CURSOR_SMOOTHING),
+      }
+    : point;
 
-  if (gameState !== "select" && gameState !== "loading") {
-    const cameraFrame = videoRect();
+  const laneProgress = constrain((cursor.x - field.x) / field.w, 0, 0.999);
+  const zone = floor(laneProgress * 4);
+  const waiting = cursor.y >= field.waitTop;
+  const lifted =
+    previous &&
+    previous.waiting &&
+    cursor.y < field.waitTop - LIFT_TRIGGER_MARGIN &&
+    previous.y - cursor.y >= LIFT_MIN_SPEED;
+  const state = waiting ? "waiting" : lifted ? "lift" : "active";
+
+  const input = { x: cursor.x, y: cursor.y, cursor, zone, state, waiting, lifted };
+  smoothedHands[hand] = input;
+  return input;
+}
+
+function keypoint(hand, fallbackIndex, name) {
+  if (!hand || !hand.keypoints) return null;
+  return hand.keypoints.find((point) => point.name === name) || hand.keypoints[fallbackIndex];
+}
+
+function mirroredPoint(point) {
+  const rect = videoRect();
+  return {
+    x: rect.x + (1 - point.x / video.width) * rect.w,
+    y: rect.y + (point.y / video.height) * rect.h,
+  };
+}
+
+function getPlayfield() {
+  const top = 86;
+  const bottom = height - 28;
+  const marginX = max(18, width * 0.045);
+  const gap = max(18, width * 0.022);
+  const usableWidth = width - marginX * 2 - gap;
+  const handWidth = usableWidth * 0.5;
+  const waitHeight = max(WAIT_ZONE_MIN_HEIGHT, height * WAIT_ZONE_RATIO);
+  const waitTop = max(top + 230, bottom - waitHeight);
+  const base = {
+    y: top,
+    h: bottom - top,
+    hitY: waitTop,
+    waitTop,
+    bottom,
+    laneCount: 4,
+    laneW: handWidth / 4,
+  };
+
+  return {
+    left: {
+      ...base,
+      x: marginX,
+      w: handWidth,
+      label: "LEFT",
+    },
+    right: {
+      ...base,
+      x: marginX + handWidth + gap,
+      w: handWidth,
+      label: "RIGHT",
+    },
+    gap,
+  };
+}
+
+function drawGame(playfield, inputs, gameTime) {
+  drawHud(gameTime);
+  drawPlayfield(playfield, inputs);
+  if (gameState === "playing") {
+    drawActiveNotes(playfield, gameTime);
+    drawHitBursts(playfield);
+  }
+  drawCursors(inputs);
+
+  if (gameState === "countdown") drawCountdown();
+  if (gameState === "finished") drawFinished();
+}
+
+function drawCameraBackground() {
+  background(5, 6, 8);
+
+  const selectedBackground = gameState === "select" ? selectedSong()?.backgroundImage : activeBackground;
+  if (selectedBackground) {
+    drawCoverImage(selectedBackground, 0, 0, width, height);
+  } else if (video && video.loadedmetadata) {
+    const rect = videoRect();
     push();
-    translate(cameraFrame.x + cameraFrame.w, cameraFrame.y);
+    translate(rect.x + rect.w, rect.y);
     scale(-1, 1);
-    tint(255, 42);
-    image(video, 0, 0, cameraFrame.w, cameraFrame.h);
+    image(video, 0, 0, rect.w, rect.h);
+    pop();
+  }
+
+  if (gameState !== "select" && video && video.loadedmetadata) {
+    const rect = videoRect();
+    push();
+    translate(rect.x + rect.w, rect.y);
+    scale(-1, 1);
+    tint(255, 56);
+    image(video, 0, 0, rect.w, rect.h);
     noTint();
     pop();
-    fill(0, 0, 0, 168);
+  }
+
+  noStroke();
+  fill(0, 0, 0, gameState === "select" ? 118 : 96);
+  rect(0, 0, width, height);
+}
+
+function drawHud(gameTime) {
+  const accuracy = judged === 0 ? 100 : (hitScore / judged) * 100;
+  noStroke();
+  fill(0, 0, 0, 120);
+  rect(0, 0, width, 70);
+
+  fill(255);
+  textAlign(LEFT, CENTER);
+  textStyle(BOLD);
+  textSize(18);
+  const hudSong = activeSong || selectedSong();
+  text(`${hudSong?.title || chart.title} - ${hudSong?.artist || chart.artist}`, 24, 23);
+  textStyle(NORMAL);
+  textSize(13);
+  fill(255, 255, 255, 160);
+  text(`${hudSong?.version || chart.version} / ${hudSong?.noteCount || chart.noteCount} playable notes`, 24, 48);
+
+  textAlign(RIGHT, CENTER);
+  textStyle(BOLD);
+  textSize(22);
+  fill(105, 245, 255);
+  text(nf(score, 1, 0), width - 24, 22);
+  textStyle(NORMAL);
+  textSize(14);
+  fill(255, 255, 255, 180);
+  text(`Combo ${combo}   Acc ${nf(constrain(accuracy, 0, 100), 2, 1)}%`, width - 24, 49);
+
+  if (lastJudge && millis() - lastJudgeAt < 650) {
+    textAlign(CENTER, CENTER);
+    textStyle(BOLD);
+    textSize(32);
+    fill(lastJudge.color);
+    text(lastJudge.label, width / 2, 98);
+  }
+}
+
+function drawPlayfield(playfield, inputs) {
+  drawHandField("left", playfield.left, inputs.left);
+  drawHandField("right", playfield.right, inputs.right);
+
+  stroke(255, 255, 255, 36);
+  strokeWeight(2);
+  line(width / 2, 86, width / 2, height - 28);
+}
+
+function drawHandField(hand, field, input) {
+  noStroke();
+  fill(4, 7, 10, 112);
+  rect(field.x, field.y, field.w, field.h, 8);
+
+  const activeZone = input ? input.zone : null;
+  for (let sector = 0; sector < field.laneCount; sector += 1) {
+    const x = laneX(field, sector);
+    const pressure = upcomingPressure(hand, sector);
+    const active = activeZone === sector;
+    const laneAlpha = active ? 82 : 28 + pressure * 62;
+
     noStroke();
-    rect(0, 0, width, height);
+    fill(handColor(hand, laneAlpha));
+    rect(x + 2, field.y, field.laneW - 4, field.hitY - field.y, 6);
+
+    stroke(255, 255, 255, 32);
+    strokeWeight(1);
+    line(x, field.y, x, field.bottom);
+
+    noStroke();
+    fill(handColor(hand, active ? 245 : 195));
+    textAlign(CENTER, CENTER);
+    textStyle(BOLD);
+    textSize(16);
+    text(laneFor(hand, sector), x + field.laneW * 0.5, field.bottom - 31);
+  }
+
+  stroke(255, 255, 255, 48);
+  strokeWeight(1);
+  line(field.x + field.w, field.y, field.x + field.w, field.bottom);
+
+  noStroke();
+  fill(0, 0, 0, 156);
+  rect(field.x, field.waitTop, field.w, field.bottom - field.waitTop, 0, 0, 8, 8);
+
+  const ready = input && input.waiting;
+  fill(handColor(hand, ready ? 78 : 38));
+  rect(field.x + 2, field.waitTop + 2, field.w - 4, field.bottom - field.waitTop - 4, 0, 0, 7, 7);
+
+  stroke(ready ? handColor(hand, 250) : color(255, 255, 255, 190));
+  strokeWeight(ready ? 4 : 3);
+  line(field.x, field.hitY, field.x + field.w, field.hitY);
+
+  for (let sector = 0; sector < field.laneCount; sector += 1) {
+    const x = laneX(field, sector);
+    const active = activeZone === sector;
+    noStroke();
+    fill(handColor(hand, active ? 245 : 195));
+    textAlign(CENTER, CENTER);
+    textStyle(BOLD);
+    textSize(16);
+    text(laneFor(hand, sector), x + field.laneW * 0.5, field.bottom - 31);
+  }
+
+  noStroke();
+  fill(handColor(hand, 205));
+  textAlign(LEFT, CENTER);
+  textStyle(BOLD);
+  textSize(12);
+  text(field.label, field.x + 10, field.y + 18);
+}
+
+function drawActiveNotes(playfield, gameTime) {
+  for (const note of notes) {
+    if (note.completed || note.missed) continue;
+    if (gameTime < note.time - APPROACH_TIME || gameTime > note.endTime + MISS_WINDOW) continue;
+
+    const lane = noteLane(note);
+    const field = playfield[lane.hand];
+    const progress = constrain((gameTime - (note.time - APPROACH_TIME)) / APPROACH_TIME, 0, 1.18);
+    const y = noteY(field, progress);
+    const alpha = gameTime > note.time ? map(gameTime - note.time, 0, MISS_WINDOW, 255, 80, true) : 255;
+
+    if (note.endTime > note.time + 80) drawHoldTail(field, lane.sector, note, gameTime, lane.hand, y);
+    drawFallingNote(field, lane.sector, y, lane.hand, alpha, note.hit);
+  }
+}
+
+function drawHoldTail(field, sector, note, gameTime, hand, headY) {
+  const distance = field.hitY - field.y;
+  const durationRatio = (note.endTime - note.time) / APPROACH_TIME;
+  const tailY = headY - distance * durationRatio;
+  const x = laneCenterX(field, sector);
+  const w = field.laneW * 0.42;
+  const topY = constrain(tailY, field.y - 80, field.hitY);
+  const bottomY = constrain(headY, field.y, field.hitY);
+
+  noStroke();
+  fill(0, 0, 0, note.holding ? 128 : 88);
+  rect(x - w * 0.5 - 4, topY, w + 8, max(8, bottomY - topY), 6);
+  fill(handColor(hand, note.holding ? 108 : 62));
+  rect(x - w * 0.5, topY, w, max(8, bottomY - topY), 5);
+}
+
+function drawFallingNote(field, sector, y, hand, alpha, hit) {
+  const x = laneX(field, sector) + field.laneW * 0.12;
+  const w = field.laneW * 0.76;
+  const h = NOTE_HEIGHT;
+
+  push();
+  drawingContext.shadowBlur = 13;
+  drawingContext.shadowColor = handShadow(hand, 0.32);
+  noStroke();
+  fill(0, 0, 0, alpha * 0.76);
+  rect(x - 4, y - h * 0.5 - 4, w + 8, h + 8, NOTE_RADIUS + 4);
+  drawingContext.shadowBlur = 0;
+  fill(handColor(hand, hit ? alpha * 0.42 : alpha));
+  rect(x, y - h * 0.5, w, h, NOTE_RADIUS);
+  fill(255, 255, 255, alpha * 0.78);
+  rect(x + w * 0.17, y - 2, w * 0.66, 4, 3);
+  pop();
+}
+
+function drawCursors(inputs) {
+  for (const hand of ["left", "right"]) {
+    const input = inputs[hand];
+    if (!input) continue;
+    const active = input.state === "lift" || input.state === "active";
+    const cursorColor = input.state === "lift" ? color(255) : active ? handColor(hand) : handColor(hand, 190);
+    push();
+    noFill();
+    stroke(cursorColor);
+    strokeWeight(3);
+    circle(input.cursor.x, input.cursor.y, input.state === "lift" ? 42 : active ? 36 : 30);
+    stroke(0, 0, 0, 170);
+    strokeWeight(5);
+    point(input.cursor.x, input.cursor.y);
+    stroke(255, 255, 255, 220);
+    strokeWeight(2);
+    line(input.cursor.x - 18, input.cursor.y, input.cursor.x + 18, input.cursor.y);
+    line(input.cursor.x, input.cursor.y - 18, input.cursor.x, input.cursor.y + 18);
+    noStroke();
+    fill(0, 0, 0, 160);
+    rectMode(CENTER);
+    rect(input.cursor.x, input.cursor.y - 30, 92, 22, 6);
+    fill(cursorColor);
+    textAlign(CENTER, CENTER);
+    textStyle(BOLD);
+    textSize(11);
+    text(`${hand.toUpperCase()} ${laneFor(hand, input.zone)}`, input.cursor.x, input.cursor.y - 31);
+    pop();
+  }
+}
+
+function drawHitBursts(playfield) {
+  const now = millis();
+  hitBursts = hitBursts.filter((burst) => now - burst.createdAt < 300);
+  for (const burst of hitBursts) {
+    const age = now - burst.createdAt;
+    const p = constrain(age / 300, 0, 1);
+    const lane = noteLane(burst);
+    const field = playfield[lane.hand];
+    const pos = { x: laneCenterX(field, lane.sector), y: field.hitY };
+    noFill();
+    stroke(handColor(lane.hand, map(p, 0, 1, 160, 0)));
+    strokeWeight(3);
+    rect(pos.x - lerp(18, field.laneW * 0.42, p), pos.y - lerp(12, 34, p), lerp(36, field.laneW * 0.84, p), lerp(24, 68, p), 8);
   }
 }
 
 function drawLoading() {
-  drawCenterText(loadingError ? "LOAD ERROR" : "LOADING", loadingError || loadingMessage);
+  drawScrim();
+  textAlign(CENTER, CENTER);
+  noStroke();
+  fill(255);
+  textStyle(BOLD);
+  textSize(min(width * 0.06, 62));
+  text("LOADING", width / 2, height * 0.42);
+  textStyle(NORMAL);
+  textSize(18);
+  fill(255, 255, 255, 205);
+  text("Preparing maps", width / 2, height * 0.5);
 }
 
 function drawSongSelect() {
-  const song = selectedSong();
-  if (!song) return;
+  const selected = selectedSong();
+  if (!selected) return;
 
   noStroke();
   fill(0, 0, 0, 72);
   rect(0, 0, width, height);
 
   const panelX = width * 0.07;
-  const panelY = height * 0.1;
+  const panelY = height * 0.12;
   const panelW = min(width * 0.52, 720);
 
   textAlign(LEFT, TOP);
   textStyle(BOLD);
   fill(255);
   textSize(clamp(width * 0.052, 42, 76));
-  text(song.title, panelX, panelY, panelW, 92);
+  text(selected.title, panelX, panelY, panelW, 92);
 
   textStyle(NORMAL);
   fill(255, 255, 255, 218);
   textSize(22);
-  text(song.artist, panelX, panelY + 98);
+  text(selected.artist, panelX, panelY + 98);
 
   textSize(14);
   fill(255, 255, 255, 165);
-  text(`${song.version} / ${song.modeLabel} / mapped by ${song.mapper}`, panelX, panelY + 132);
+  text(`${selected.version} / ${selected.modeLabel} / ${selected.noteCount} notes`, panelX, panelY + 132);
 
   const rail = songRailLayout();
-  for (let i = 0; i < songs.length; i++) {
+  for (let i = 0; i < songs.length; i += 1) {
     drawSongTile(i, rail.x, rail.y + i * rail.step, rail.w, rail.h);
   }
 
-  drawPinchStartPrompt(song);
+  drawStartPrompt();
 }
 
 function drawSongTile(index, x, y, w, h) {
-  const song = songs[index];
+  const item = songs[index];
   const selected = index === selectedSongIndex;
   const hover = mouseX >= x && mouseX <= x + w && mouseY >= y && mouseY <= y + h;
 
-  if (song.backgroundImage) drawCoverImage(song.backgroundImage, x, y, w, h);
+  if (item.backgroundImage) drawCoverImage(item.backgroundImage, x, y, w, h);
   noStroke();
-  fill(selected ? color(8, 18, 26, 80) : color(0, 0, 0, hover ? 110 : 152));
+  fill(selected ? color(8, 18, 26, 90) : color(0, 0, 0, hover ? 112 : 156));
   rect(x, y, w, h, 8);
 
   if (selected) {
-    stroke(110, 245, 255, 230);
+    stroke(105, 245, 255, 235);
     strokeWeight(3);
     noFill();
     rect(x + 1.5, y + 1.5, w - 3, h - 3, 8);
   }
 
   noStroke();
-  fill(selected ? color(110, 245, 255) : color(255));
+  fill(selected ? color(105, 245, 255) : color(255));
   textAlign(LEFT, TOP);
   textStyle(BOLD);
   textSize(18);
-  text(song.title, x + 18, y + 17, w - 36, 24);
+  text(item.title, x + 18, y + 17, w - 36, 24);
 
   textStyle(NORMAL);
   textSize(13);
   fill(255, 255, 255, 178);
-  text(`${song.artist}  ${song.version}`, x + 18, y + 45, w - 36, 18);
+  text(`${item.artist}  ${item.version}`, x + 18, y + 45, w - 36, 18);
 
   fill(255, 255, 255, 132);
-  text(song.modeLabel, x + 18, y + h - 28);
+  text(item.modeLabel, x + 18, y + h - 28);
 }
 
-function drawPinchStartPrompt(song) {
-  const x = width * 0.07;
-  const y = height - 118;
-  const isLoading = pendingPinchStart || song.loading;
-
-  fill(0, 0, 0, 118);
+function drawStartPrompt() {
+  const prompt = startPromptRect();
+  fill(0, 0, 0, 128);
   noStroke();
-  rect(x, y, min(520, width * 0.7), 74, 8);
+  rect(prompt.x, prompt.y, prompt.w, prompt.h, 8);
 
-  fill(isLoading ? color(255, 235, 120) : color(110, 245, 255));
+  fill(105, 245, 255);
   textAlign(LEFT, TOP);
   textStyle(BOLD);
   textSize(18);
-  text(isLoading ? loadingMessage : "Pinch to start", x + 22, y + 17);
+  text("Space / Enter to select", prompt.x + 22, prompt.y + 17);
 
   fill(255, 255, 255, 165);
   textStyle(NORMAL);
   textSize(13);
-  text(`${songs.length} tracks loaded`, x + 22, y + 44);
+  text("Starts after 3 2 1 countdown", prompt.x + 22, prompt.y + 44);
 }
 
 function songRailLayout() {
@@ -747,476 +848,146 @@ function songRailLayout() {
 
 function songIndexAt(x, y) {
   const rail = songRailLayout();
-  for (let i = 0; i < songs.length; i++) {
+  for (let i = 0; i < songs.length; i += 1) {
     const tileY = rail.y + i * rail.step;
     if (x >= rail.x && x <= rail.x + rail.w && y >= tileY && y <= tileY + rail.h) return i;
   }
   return -1;
 }
 
-function drawGame(gameTime) {
-  drawLaneGuides();
-  drawTopHud(gameTime);
-
-  if (gameState === "calibrateOpen") {
-    drawCalibration("OPEN HAND", "Keep thumb and index apart");
-    return;
-  }
-
-  if (gameState === "calibratePinch") {
-    drawCalibration("PINCH", "Touch thumb and index together");
-    return;
-  }
-
-  if (gameState === "countdown") {
-    const left = 3 - floor((millis() - countdownStartedAt) / 1000);
-    drawCenterText(str(max(left, 1)), "Get both hands in camera");
-    return;
-  }
-
-  drawNotes(gameTime);
-  drawHitEffects();
-  drawJudgeText();
-
-  if (gameState === "finished") {
-    drawFinished();
-  }
+function startPromptRect() {
+  return {
+    x: width * 0.07,
+    y: height - 118,
+    w: min(520, width * 0.7),
+    h: 74,
+  };
 }
 
-function drawLaneGuides() {
-  const centerLeft = LANES.left.x1 * width;
-  const centerRight = LANES.right.x0 * width;
-  const top = 62;
+function pointInRect(x, y, rectInfo) {
+  return x >= rectInfo.x && x <= rectInfo.x + rectInfo.w && y >= rectInfo.y && y <= rectInfo.y + rectInfo.h;
+}
 
-  noStroke();
-  fill(0, 0, 0, 22);
-  rect(0, top, centerLeft, height - top);
-  rect(centerRight, top, width - centerRight, height - top);
-
-  fill(0, 0, 0, 88);
-  rect(centerLeft, top, centerRight - centerLeft, height - top);
-
-  stroke(255, 255, 255, 18);
-  strokeWeight(1);
-  line(centerLeft, top, centerLeft, height);
-  line(centerRight, top, centerRight, height);
-
-  noStroke();
+function drawCountdown() {
+  const left = max(1, 3 - floor((millis() - countdownStartedAt) / 1000));
+  drawScrim();
   textAlign(CENTER, CENTER);
-  textSize(13);
-  fill(255, 255, 255, 48);
-  text(LANES.left.label, (LANES.left.x0 + LANES.left.x1) * 0.5 * width, top + 24);
-  text(LANES.right.label, (LANES.right.x0 + LANES.right.x1) * 0.5 * width, top + 24);
-}
-
-function drawTopHud(gameTime) {
-  const acc = judgedAccuracyMax === 0 ? 100 : (earnedAccuracyScore / judgedAccuracyMax) * 100;
-  noStroke();
-  fill(0, 0, 0, 140);
-  rect(0, 0, width, 62);
-
-  fill(255);
-  textAlign(LEFT, CENTER);
-  textSize(18);
-  text(`Score ${floor(score)}`, 24, 22);
-  text(`Combo ${combo}`, 24, 46);
-
-  if (activeSong) {
-    textAlign(CENTER, CENTER);
-    textSize(15);
-    fill(255, 255, 255, 190);
-    text(`${activeSong.title}  ${formatTime(gameTime)}`, width / 2, 32);
-  }
-
-  fill(255);
-  textAlign(RIGHT, CENTER);
-  textSize(18);
-  text(`Acc ${nf(constrain(acc, 0, 100), 2, 1)}%`, width - 24, 22);
-  text(`Max ${maxCombo}`, width - 24, 46);
-}
-
-function drawNotes(gameTime) {
-  for (const note of notes) {
-    if (note.hit || note.missed || note.completed) continue;
-
-    if (note.type === "slider") {
-      drawSlider(note, gameTime);
-    } else {
-      drawTapLike(note, gameTime);
-    }
-  }
-}
-
-function drawTapLike(note, gameTime) {
-  const visible = gameTime >= note.time - APPROACH_TIME && gameTime <= note.time + BAD_WINDOW;
-  if (!visible) return;
-
-  const targetColor = note.type === "dual" ? color(255, 210, 110) : color(255);
-  const approach = approachSize(note.time, gameTime);
-  const progress = approachProgress(note.time, gameTime);
-  const noteAlpha = noteOpacity(note.time, gameTime);
-
-  if (note.type === "dual") {
-    const a = screenPoint(note.targets[0]);
-    const b = screenPoint(note.targets[1]);
-    stroke(255, 255, 255, 64 * noteAlpha);
-    strokeWeight(2);
-    line(a.x, a.y, b.x, b.y);
-  }
-
-  for (const target of note.targets) {
-    const point = screenPoint(target);
-    drawTarget(point.x, point.y, NOTE_RADIUS, approach, targetColor, noteAlpha, progress);
-  }
-}
-
-function drawSlider(note, gameTime) {
-  const visible = gameTime >= note.time - APPROACH_TIME && gameTime <= note.time + note.duration + 250;
-  if (!visible) return;
-
-  const sliderColor = color(255);
-  const start = screenPoint(note.points[0]);
-  const approach = approachSize(note.time, gameTime);
-  const progress = approachProgress(note.time, gameTime);
-  const noteAlpha = noteOpacity(note.time, gameTime);
-
-  drawSliderTrack(note, noteAlpha);
-
-  drawTarget(start.x, start.y, NOTE_RADIUS, approach, sliderColor, noteAlpha, progress);
-
-  if (note.started) {
-    const progress = constrain((gameTime - note.time) / note.duration, 0, 1);
-    const follow = pointOnSlider(note, progress);
-    const tracking = handInputs.some((hand) => {
-      return handMatchesTarget(hand, note.points[0]) && dist(hand.cursor.x, hand.cursor.y, follow.x, follow.y) <= SLIDER_TOLERANCE;
-    });
-
-    const followColor = tracking ? color(255) : color(255, 95, 95);
-    drawSliderFollowCircle(follow.x, follow.y, followColor, tracking);
-  }
-}
-
-function drawSliderTrack(note, alphaScale) {
-  const points = [];
-  for (let i = 0; i <= 36; i++) {
-    points.push(pointOnSlider(note, i / 36));
-  }
-
-  push();
-  drawingContext.shadowBlur = 16;
-  drawingContext.shadowColor = "rgba(255,255,255,0.16)";
-  strokeCap(ROUND);
-  strokeJoin(ROUND);
-  noFill();
-
-  stroke(255, 255, 255, 52 * alphaScale);
-  strokeWeight(SLIDER_TRACK_WIDTH + SLIDER_TRACK_BORDER * 2);
-  drawPolyline(points);
-
-  drawingContext.shadowBlur = 0;
-  stroke(255, 255, 255, 220 * alphaScale);
-  strokeWeight(SLIDER_TRACK_WIDTH + SLIDER_TRACK_BORDER);
-  drawPolyline(points);
-
-  stroke(12, 12, 12, 185 * alphaScale);
-  strokeWeight(SLIDER_TRACK_WIDTH);
-  drawPolyline(points);
-
-  stroke(255, 255, 255, 34 * alphaScale);
-  strokeWeight(SLIDER_TRACK_WIDTH * 0.72);
-  drawPolyline(points);
-  pop();
-}
-
-function drawPolyline(points) {
-  beginShape();
-  for (const point of points) {
-    vertex(point.x, point.y);
-  }
-  endShape();
-}
-
-function drawSliderFollowCircle(x, y, followColor, tracking) {
-  const ringAlpha = tracking ? 235 : 210;
-  push();
-  drawingContext.shadowBlur = tracking ? 18 : 10;
-  drawingContext.shadowColor = tracking ? "rgba(255,255,255,0.35)" : "rgba(255,95,95,0.35)";
-
-  noStroke();
-  fill(255, 255, 255, tracking ? 38 : 18);
-  circle(x, y, NOTE_RADIUS * 2.12);
-
-  noFill();
-  stroke(red(followColor), green(followColor), blue(followColor), ringAlpha);
-  strokeWeight(7);
-  circle(x, y, NOTE_RADIUS * 1.82);
-
-  stroke(255, 255, 255, tracking ? 130 : 70);
-  strokeWeight(2);
-  circle(x, y, NOTE_RADIUS * 2.22);
-  pop();
-}
-
-function drawTarget(x, y, radius, approach, targetColor, alphaScale = 1, progress = 1) {
-  push();
-  drawingContext.shadowBlur = 18;
-  drawingContext.shadowColor = "rgba(255,255,255,0.22)";
-
-  noStroke();
-  fill(255, 255, 255, 22 * alphaScale);
-  circle(x, y, radius * 2.34);
-
-  fill(10, 10, 10, 112 * alphaScale);
-  circle(x, y, radius * 1.62);
-
-  noFill();
-  stroke(red(targetColor), green(targetColor), blue(targetColor), 230 * alphaScale);
-  strokeWeight(7);
-  circle(x, y, radius * 1.72);
-
-  stroke(255, 255, 255, 118 * alphaScale);
-  strokeWeight(2);
-  circle(x, y, radius * 2.12);
-
-  drawingContext.shadowBlur = 0;
-  drawApproachRings(x, y, radius, approach, alphaScale, progress);
-  pop();
-}
-
-function drawApproachRings(x, y, radius, approach, alphaScale, progress) {
-  noFill();
-  const outerAlpha = map(progress, 0, 1, 70, 210) * alphaScale;
-
-  stroke(255, 255, 255, outerAlpha);
-  strokeWeight(3);
-  circle(x, y, approach * 2);
-}
-
-function drawJudgeText() {
-  if (!lastJudge) return;
-  const age = millis() - lastJudgeAt;
-  if (age > 650) return;
-
-  const alpha = map(age, 0, 650, 255, 0);
-  fill(red(lastJudge.judgeColor), green(lastJudge.judgeColor), blue(lastJudge.judgeColor), alpha);
-  noStroke();
-  textAlign(CENTER, CENTER);
-  textSize(40);
   textStyle(BOLD);
-  text(lastJudge.label, width / 2, height * 0.22);
-  textStyle(NORMAL);
-}
-
-function drawHitEffects() {
-  const now = millis();
-  hitEffects = hitEffects.filter((effect) => now - effect.createdAt <= 620);
-
-  for (const effect of hitEffects) {
-    const age = now - effect.createdAt;
-    const progress = constrain(age / 620, 0, 1);
-    const alpha = map(progress, 0, 1, 230, 0);
-    const baseSize = effect.type === "hit" ? NOTE_RADIUS * 1.1 : NOTE_RADIUS * 0.9;
-    const ringSize = effect.type === "hit" ? baseSize + progress * 115 : baseSize + progress * 42;
-
-    noFill();
-    stroke(red(effect.effectColor), green(effect.effectColor), blue(effect.effectColor), alpha);
-    strokeWeight(effect.type === "hit" ? 7 - progress * 5 : 5);
-    circle(effect.x, effect.y, ringSize * 2);
-
-    if (effect.type === "hit") {
-      noStroke();
-      fill(red(effect.effectColor), green(effect.effectColor), blue(effect.effectColor), alpha * 0.32);
-      circle(effect.x, effect.y, (NOTE_RADIUS * 1.6 + progress * 65) * 2);
-
-      stroke(255, 255, 255, alpha * 0.75);
-      strokeWeight(3);
-      for (let i = 0; i < 8; i++) {
-        const angle = (TWO_PI / 8) * i + progress * 0.5;
-        const inner = NOTE_RADIUS * 0.65 + progress * 45;
-        const outer = inner + 16 + progress * 22;
-        line(effect.x + cos(angle) * inner, effect.y + sin(angle) * inner, effect.x + cos(angle) * outer, effect.y + sin(angle) * outer);
-      }
-    } else {
-      stroke(255, 95, 95, alpha);
-      strokeWeight(5);
-      const crossSize = NOTE_RADIUS * 0.45 + progress * 18;
-      line(effect.x - crossSize, effect.y - crossSize, effect.x + crossSize, effect.y + crossSize);
-      line(effect.x + crossSize, effect.y - crossSize, effect.x - crossSize, effect.y + crossSize);
-    }
-  }
-}
-
-function drawCenterText(title, subtitle) {
-  fill(0, 0, 0, 138);
-  noStroke();
-  rect(0, 0, width, height);
-  textAlign(CENTER, CENTER);
+  textSize(min(width, height) * 0.16);
   fill(255);
-  textStyle(BOLD);
-  textSize(min(width, height) * 0.12);
-  text(title, width / 2, height / 2 - 20);
-  textStyle(NORMAL);
-  textSize(18);
-  fill(255, 255, 255, 210);
-  text(subtitle, width / 2, height / 2 + 58);
-}
-
-function drawCalibration(title, subtitle) {
-  const progress = constrain((millis() - calibrationPhaseStartedAt) / CALIBRATION_STEP_TIME, 0, 1);
-  drawCenterText(title, subtitle);
-
-  const barWidth = min(width * 0.42, 320);
-  const barHeight = 8;
-  const x = width / 2 - barWidth / 2;
-  const y = height / 2 + 88;
-  noStroke();
-  fill(255, 255, 255, 70);
-  rect(x, y, barWidth, barHeight, 8);
-  fill(255, 255, 255, 225);
-  rect(x, y, barWidth * progress, barHeight, 8);
-
-  if (handInputs.length === 0) {
-    fill(255, 120, 120);
-    textAlign(CENTER, CENTER);
-    textSize(16);
-    text("No hand detected", width / 2, y + 34);
-  }
+  text(left, width / 2, height / 2);
 }
 
 function drawFinished() {
-  const acc = judgedAccuracyMax === 0 ? 100 : (earnedAccuracyScore / judgedAccuracyMax) * 100;
-  fill(0, 0, 0, 175);
-  rect(0, 0, width, height);
+  const accuracy = judged === 0 ? 100 : (hitScore / judged) * 100;
+  drawScrim();
   textAlign(CENTER, CENTER);
   noStroke();
   fill(255);
   textStyle(BOLD);
-  textSize(54);
-  text("FINISH", width / 2, height / 2 - 82);
+  textSize(56);
+  text("FINISH", width / 2, height * 0.36);
   textStyle(NORMAL);
   textSize(24);
-  text(`Score ${floor(score)}`, width / 2, height / 2 - 20);
-  text(`Accuracy ${nf(constrain(acc, 0, 100), 2, 1)}%`, width / 2, height / 2 + 18);
-  text(`Max Combo ${maxCombo}`, width / 2, height / 2 + 56);
+  text(`Score ${nf(score, 1, 0)}`, width / 2, height * 0.45);
+  text(`Accuracy ${nf(constrain(accuracy, 0, 100), 2, 1)}%`, width / 2, height * 0.5);
+  text(`Max Combo ${maxCombo}`, width / 2, height * 0.55);
+  textSize(16);
+  fill(255, 255, 255, 175);
+  text("Press R to replay", width / 2, height * 0.63);
 }
 
-function drawCursors() {
-  for (const hand of handInputs) {
-    const cursor = hand.cursor;
-    stroke(255, 255, 255, hand.pinching ? 88 : 52);
-    strokeWeight(1.5);
-    line(cursor.x, cursor.y, hand.thumb.x, hand.thumb.y);
-
-    noStroke();
-    fill(255, 255, 255, hand.pinching ? 82 : 48);
-    circle(cursor.x, cursor.y, hand.pinching ? 28 : 22);
-
-    if (hand.justPinched) {
-      fill(255, 255, 255, 135);
-      circle(cursor.x, cursor.y, 12);
-    }
-
-    fill(0, 0, 0, 130);
-    circle(cursor.x, cursor.y, 6);
-  }
-}
-
-function drawPinchImpactEffects() {
-  const now = millis();
-  pinchEffects = pinchEffects.filter((effect) => now - effect.createdAt <= PINCH_IMPACT_DURATION);
-
-  for (const effect of pinchEffects) {
-    const age = now - effect.createdAt;
-    const progress = constrain(age / PINCH_IMPACT_DURATION, 0, 1);
-    const eased = easeOutCubic(progress);
-    const alpha = map(progress, 0, 1, 110, 0);
-    const ringSize = lerp(18, 52, eased);
-
-    push();
-    drawingContext.shadowBlur = 8 * (1 - progress);
-    drawingContext.shadowColor = "rgba(255,255,255,0.18)";
-
-    noFill();
-    stroke(255, 255, 255, alpha);
-    strokeWeight(2 - progress);
-    circle(effect.x, effect.y, ringSize);
-
-    noStroke();
-    fill(255, 255, 255, alpha * 0.16);
-    circle(effect.x, effect.y, lerp(16, 28, eased));
-    pop();
-  }
-}
-
-function drawPinchDebug() {
-  if (gameState === "select" || gameState === "playing") return;
-  const panelWidth = 230;
-  const panelHeight = 38 + max(1, min(handInputs.length, 2)) * 48;
-  const x = 16;
-  const y = 78;
-
+function drawScrim() {
   noStroke();
-  fill(0, 0, 0, 130);
-  rect(x, y, panelWidth, panelHeight, 8);
-
-  fill(255, 255, 255, 220);
-  textAlign(LEFT, CENTER);
-  textSize(13);
-  text("Pinch meter", x + 12, y + 18);
-
-  if (handInputs.length === 0) {
-    fill(255, 255, 255, 150);
-    text("Hand: none", x + 12, y + 54);
-    return;
-  }
-
-  const handCount = min(handInputs.length, 2);
-  for (let i = 0; i < handCount; i++) {
-    const hand = handInputs[i];
-    const rowY = y + 46 + i * 48;
-    const meterX = x + 12;
-    const meterY = rowY + 14;
-    const meterWidth = panelWidth - 24;
-    const meterHeight = 8;
-    const threshold = hand.pinching ? hand.releaseThreshold : hand.startThreshold;
-    const distanceRatio = constrain(hand.pinchDistance / max(hand.releaseThreshold * 1.7, 1), 0, 1);
-    const thresholdRatio = constrain(threshold / max(hand.releaseThreshold * 1.7, 1), 0, 1);
-
-    fill(hand.pinching ? color(255, 235, 120) : color(255, 255, 255, 190));
-    text(`Hand ${i + 1}: ${hand.pinching ? "PINCH" : "open"}`, meterX, rowY);
-
-    fill(255, 255, 255, 55);
-    rect(meterX, meterY, meterWidth, meterHeight, 6);
-    fill(hand.pinching ? color(255, 235, 120) : color(110, 245, 255));
-    rect(meterX, meterY, meterWidth * (1 - distanceRatio), meterHeight, 6);
-
-    stroke(255, 120, 120, 220);
-    strokeWeight(2);
-    const thresholdX = meterX + meterWidth * (1 - thresholdRatio);
-    line(thresholdX, meterY - 4, thresholdX, meterY + meterHeight + 4);
-
-    noStroke();
-    fill(255, 255, 255, 130);
-    textSize(11);
-    text(`${floor(hand.pinchDistance)}px / ${floor(threshold)}px`, meterX, rowY + 34);
-    textSize(13);
-  }
-}
-
-function drawMirroredCamera(options = {}) {
-  const overlayAlpha = options.overlayAlpha ?? 105;
-  background(10);
-  const cameraFrame = videoRect();
-
-  push();
-  translate(cameraFrame.x + cameraFrame.w, cameraFrame.y);
-  scale(-1, 1);
-  image(video, 0, 0, cameraFrame.w, cameraFrame.h);
-  pop();
-
-  fill(0, 0, 0, overlayAlpha);
-  noStroke();
+  fill(0, 0, 0, 142);
   rect(0, 0, width, height);
+}
+
+function addHitBurst(note) {
+  hitBursts.push({
+    lane: note.lane,
+    hand: note.hand,
+    sector: note.sector,
+    createdAt: millis(),
+  });
+}
+
+function showJudge(label, judgeColor) {
+  lastJudge = { label, color: judgeColor };
+  lastJudgeAt = millis();
+}
+
+function upcomingPressure(hand, sector) {
+  if (gameState !== "playing") return 0;
+  const gameTime = getGameTime();
+  let pressure = 0;
+  for (const note of notes) {
+    if (note.completed || note.missed) continue;
+    const lane = noteLane(note);
+    if (lane.hand !== hand || lane.sector !== sector) continue;
+    const until = note.time - gameTime;
+    if (until < 0 || until > APPROACH_TIME) continue;
+    pressure = max(pressure, 1 - until / APPROACH_TIME);
+  }
+  return pressure;
+}
+
+function laneFor(hand, sector) {
+  const index = LANE_MAP.findIndex((lane) => lane.hand === hand && lane.sector === sector);
+  return index === -1 ? "" : LANE_MAP[index].label;
+}
+
+function noteLane(note) {
+  if (note && note.hand && Number.isFinite(note.sector)) {
+    return { hand: note.hand, sector: note.sector };
+  }
+  return LANE_MAP[note?.lane] || LANE_MAP[0];
+}
+
+function laneX(field, sector) {
+  return field.x + sector * field.laneW;
+}
+
+function laneCenterX(field, sector) {
+  return laneX(field, sector) + field.laneW * 0.5;
+}
+
+function noteY(field, progress) {
+  return lerp(field.y - NOTE_HEIGHT, field.hitY, constrain(progress, 0, 1.18));
+}
+
+function handColor(hand, alpha = 255) {
+  const rgb = HAND_RGB[hand];
+  return color(rgb[0], rgb[1], rgb[2], alpha);
+}
+
+function handShadow(hand, alpha) {
+  const rgb = HAND_RGB[hand];
+  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
+}
+
+function clamp(value, minValue, maxValue) {
+  return Math.max(minValue, Math.min(maxValue, value));
+}
+
+function videoRect() {
+  const videoRatio = video.width / video.height;
+  const canvasRatio = width / height;
+  let w = width;
+  let h = height;
+
+  if (canvasRatio > videoRatio) {
+    h = width / videoRatio;
+  } else {
+    w = height * videoRatio;
+  }
+
+  return {
+    x: (width - w) / 2,
+    y: (height - h) / 2,
+    w,
+    h,
+  };
 }
 
 function drawCoverImage(img, x, y, w, h) {
@@ -1227,202 +998,13 @@ function drawCoverImage(img, x, y, w, h) {
   let sw = img.width;
   let sh = img.height;
 
-  if (targetRatio > imageRatio) {
-    sh = img.width / targetRatio;
-    sy = (img.height - sh) / 2;
-  } else {
+  if (imageRatio > targetRatio) {
     sw = img.height * targetRatio;
     sx = (img.width - sw) / 2;
-  }
-
-  image(img, x, y, w, h, sx, sy, sw, sh);
-}
-
-function readHandInputs() {
-  const inputs = [];
-  for (let i = 0; i < hands.length; i++) {
-    const hand = hands[i];
-    const wrist = keypoint(hand, 0, "wrist");
-    const thumb = keypoint(hand, 4, "thumb_tip");
-    const index = keypoint(hand, 8, "index_finger_tip");
-    const indexBase = keypoint(hand, 5, "index_finger_mcp");
-
-    if (!wrist || !thumb || !index || !indexBase) continue;
-
-    const cursor = mirroredPoint(index);
-    const thumbPoint = mirroredPoint(thumb);
-    const wristPoint = mirroredPoint(wrist);
-    const basePoint = mirroredPoint(indexBase);
-    const handScale = max(45, dist(wristPoint.x, wristPoint.y, basePoint.x, basePoint.y));
-    const pinchDistance = dist(cursor.x, cursor.y, thumbPoint.x, thumbPoint.y);
-    const wasPinching = previousPinches[i] || false;
-    const startThreshold = min(handScale * calibratedPinchStartRatio, PINCH_MAX_START_DISTANCE);
-    const releaseThreshold = min(handScale * calibratedPinchReleaseRatio, PINCH_MAX_START_DISTANCE * 1.35);
-    const pinching = wasPinching ? pinchDistance < releaseThreshold : pinchDistance < startThreshold;
-    const justPinched = pinching && !wasPinching;
-    const lastPinchAt = justPinched ? getGameTime() : getPreviousPinchTime(i, pinching);
-    if (justPinched) {
-      addPinchImpactEffect(cursor, cursor.x < width / 2 ? "left" : "right");
-    }
-
-    inputs.push({
-      cursor,
-      thumb: thumbPoint,
-      side: cursor.x < width / 2 ? "left" : "right",
-      pinching,
-      justPinched,
-      lastPinchAt,
-      pinchDistance,
-      handScale,
-      pinchRatio: pinchDistance / handScale,
-      startThreshold,
-      releaseThreshold,
-      rawIndex: i,
-    });
-  }
-  return inputs;
-}
-
-function addPinchImpactEffect(point, side) {
-  pinchEffects.push({
-    x: point.x,
-    y: point.y,
-    side,
-    createdAt: millis(),
-  });
-}
-
-function getPreviousPinchTime(index, pinching) {
-  const previousInput = handInputs.find((hand) => hand.rawIndex === index);
-  if (pinching && previousInput) return previousInput.lastPinchAt;
-  return null;
-}
-
-function keypoint(hand, fallbackIndex, name) {
-  if (!hand || !hand.keypoints) return null;
-  return hand.keypoints.find((point) => point.name === name) || hand.keypoints[fallbackIndex];
-}
-
-function mirroredPoint(point) {
-  const rect = videoRect();
-  return {
-    x: rect.x + (1 - point.x / video.width) * rect.w,
-    y: rect.y + (point.y / video.height) * rect.h,
-  };
-}
-
-function screenPoint(point) {
-  if (point.side && LANES[point.side]) {
-    const lane = LANES[point.side];
-    return {
-      x: lerp(lane.x0 * width, lane.x1 * width, point.x),
-      y: point.y * height,
-    };
-  }
-
-  return {
-    x: point.x * width,
-    y: point.y * height,
-  };
-}
-
-function handMatchesTarget(hand, target) {
-  return !target.side || hand.side === target.side;
-}
-
-function videoRect() {
-  const videoRatio = video.width / video.height;
-  const canvasRatio = width / height;
-  let w;
-  let h;
-  if (canvasRatio > videoRatio) {
-    w = width;
-    h = width / videoRatio;
   } else {
-    h = height;
-    w = height * videoRatio;
+    sh = img.width / targetRatio;
+    sy = (img.height - sh) / 2;
   }
-  return {
-    x: (width - w) / 2,
-    y: (height - h) / 2,
-    w,
-    h,
-  };
-}
 
-function approachSize(noteTime, gameTime) {
-  const progress = approachProgress(noteTime, gameTime);
-  return lerp(APPROACH_RADIUS, NOTE_RADIUS, progress);
-}
-
-function approachProgress(noteTime, gameTime) {
-  return constrain(1 - (noteTime - gameTime) / APPROACH_TIME, 0, 1);
-}
-
-function noteOpacity(noteTime, gameTime) {
-  const untilHit = noteTime - gameTime;
-  if (untilHit >= 0) {
-    return map(approachProgress(noteTime, gameTime), 0, 1, 0.32, 1);
-  }
-  return constrain(map(abs(untilHit), 0, BAD_WINDOW, 1, 0.36), 0.36, 1);
-}
-
-function easeOutCubic(amount) {
-  const t = constrain(amount, 0, 1);
-  return 1 - pow(1 - t, 3);
-}
-
-function isInsideTarget(cursor, target, multiplier) {
-  const point = screenPoint(target);
-  return dist(cursor.x, cursor.y, point.x, point.y) <= NOTE_RADIUS * multiplier;
-}
-
-function pointOnSlider(note, progress) {
-  const a = screenPoint(note.points[0]);
-  const b = screenPoint(note.points[1]);
-  const c = screenPoint(note.points[2]);
-  const ab = lerpPoint(a, b, progress);
-  const bc = lerpPoint(b, c, progress);
-  return lerpPoint(ab, bc, progress);
-}
-
-function lerpPoint(a, b, amount) {
-  return {
-    x: lerp(a.x, b.x, amount),
-    y: lerp(a.y, b.y, amount),
-  };
-}
-
-function median(values) {
-  return percentile(values, 0.5);
-}
-
-function percentile(values, amount) {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const index = floor(constrain(amount, 0, 1) * (sorted.length - 1));
-  return sorted[index];
-}
-
-function formatTime(ms) {
-  const seconds = floor(ms / 1000);
-  return `${floor(seconds / 60)}:${nf(seconds % 60, 2)}`;
-}
-
-function clamp(value, minValue, maxValue) {
-  return Math.max(minValue, Math.min(maxValue, value));
-}
-
-function stopActiveSound() {
-  if (activeSound?.isPlaying()) {
-    activeSound.stop();
-  }
-}
-
-function resumeAudioContext() {
-  if (typeof getAudioContext !== "function") return;
-  const context = getAudioContext();
-  if (context?.state === "suspended") {
-    context.resume();
-  }
+  image(img, sx, sy, sw, sh, x, y, w, h);
 }
