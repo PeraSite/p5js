@@ -1,6 +1,6 @@
 # Nose Piano
 
-This project is a fixed 9:16 vertical mobile p5.js/ml5.js bodyPose rhythm game.
+This project is a fixed 9:16 vertical mobile p5.js/ml5.js faceMesh rhythm game.
 Falling notes use chart timing, but no backing audio is played.
 When the face-controlled character touches a falling note inside the timing window, the game plays that note's assigned piano pitch.
 If the player misses notes, the intended melody becomes sparse or wrong.
@@ -16,7 +16,7 @@ The cat face controlled by the player's nose or head position.
 _Avoid_: basket, catcher, finger
 
 **Face point**:
-The mirrored camera-space nose position, falling back to eyes/ears if nose confidence is low.
+The mirrored camera-space faceMesh nose landmark.
 _Avoid_: hand input, finger x
 
 **Hit window**:
@@ -27,8 +27,8 @@ _Avoid_: catch line, wait zone
 
 - Chart timing controls when notes reach the play area.
 - Chart lane data controls each note's x position and assigned pitch.
-- The camera request, displayed camera crop, playfield, and bodyPose coordinate mapping all use the same 9:16 stage.
-- bodyPose controls the character with the user's nose first, then eye/ear fallback.
+- The camera request, displayed camera crop, playfield, and faceMesh coordinate mapping all use the same 9:16 stage.
+- faceMesh controls the character with the user's nose landmark, so the game works even when only the face is visible.
 - Touch, mouse, and arrow keys are only fallback controls for testing.
 - A note sounds when it physically collides with the character anywhere in the 9:16 stage.
 - On-beat collisions increase score and combo.

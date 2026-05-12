@@ -1,7 +1,6 @@
 let video;
-let bodyPose;
-let poses = [];
-let connections = [];
+let faceMesh;
+let faces = [];
 let easyChart;
 let piano;
 let reverb;
@@ -23,19 +22,20 @@ let lastJudgeAt = 0;
 let smoothedPlayer = null;
 let fallbackPlayer = null;
 let audioReady = false;
-let poseDetectStarted = false;
-let poseDebugEnabled = true;
-let bodyPoseLoadStatus = "not checked";
-let poseDebug = {
+let faceDetectStarted = false;
+let faceDebugEnabled = true;
+let faceMeshLoadStatus = "not checked";
+let faceDebug = {
   cameraCallbackAt: 0,
   detectStartAt: 0,
   detectError: "",
-  lastPoseAt: 0,
-  lastPoseCount: 0,
+  lastFaceAt: 0,
+  lastFaceCount: 0,
   lastKeypointCount: 0,
   lastNoseConfidence: 0,
   lastTrackedPoint: null,
 };
+let faceTransformIndex = 0;
 
 const CHART_PATH = "assets/mania/pretender-easy.json";
 const CAMERA_W = 360;
@@ -53,6 +53,15 @@ const MAX_NOTES = 220;
 const SMOOTHING = 0.42;
 const NOSE_CONFIDENCE = 0.18;
 const MISS_SOUND_MIN_GAP = 90;
+const FACE_TRANSFORM_MODES = [
+  "mirror",
+  "direct",
+  "rotate-cw",
+  "rotate-ccw",
+  "rotate-180",
+  "mirror-rotate-cw",
+  "mirror-rotate-ccw",
+];
 const NOTE_COLORS = [
   [255, 105, 180],
   [255, 202, 87],
@@ -84,9 +93,9 @@ const MELODY = [
 
 function preload() {
   easyChart = loadJSON(CHART_PATH);
-  if (shouldLoadBodyPose()) {
-    bodyPose = ml5.bodyPose();
-    bodyPoseLoadStatus = "created";
+  if (shouldLoadFaceMesh()) {
+    faceMesh = ml5.faceMesh({ maxFaces: 1, refineLandmarks: false, flipHorizontal: false });
+    faceMeshLoadStatus = "created";
   }
 }
 
@@ -99,14 +108,11 @@ function setup() {
   setupCamera();
   setupSynth();
   buildNotes();
-  if (bodyPose && typeof bodyPose.getSkeleton === "function") {
-    connections = bodyPose.getSkeleton();
-  }
   gameState = "ready";
 }
 
 function draw() {
-  tryStartBodyPose();
+  tryStartFaceMesh();
   drawScene();
   const player = readPlayer();
 
@@ -128,7 +134,7 @@ function draw() {
   if (gameState === "ready") drawStartScreen(player);
   if (gameState === "countdown") drawCountdown();
   if (gameState === "finished") drawFinishScreen();
-  if (poseDebugEnabled) drawPoseDebug(player);
+  if (faceDebugEnabled) drawFaceDebug(player);
 }
 
 function setupCamera() {
@@ -143,24 +149,24 @@ function setupCamera() {
     },
     audio: false,
   }, () => {
-    poseDebug.cameraCallbackAt = millis();
-    tryStartBodyPose();
+    faceDebug.cameraCallbackAt = millis();
+    tryStartFaceMesh();
   });
   video.size(CAMERA_W, CAMERA_H);
   video.elt.setAttribute("playsinline", "");
   video.elt.setAttribute("muted", "");
   video.elt.muted = true;
-  video.elt.addEventListener("loadedmetadata", tryStartBodyPose);
-  video.elt.addEventListener("loadeddata", tryStartBodyPose);
-  video.elt.addEventListener("canplay", tryStartBodyPose);
-  video.elt.addEventListener("playing", tryStartBodyPose);
+  video.elt.addEventListener("loadedmetadata", tryStartFaceMesh);
+  video.elt.addEventListener("loadeddata", tryStartFaceMesh);
+  video.elt.addEventListener("canplay", tryStartFaceMesh);
+  video.elt.addEventListener("playing", tryStartFaceMesh);
   video.hide();
 }
 
-function tryStartBodyPose() {
-  if (poseDetectStarted) return;
-  if (!bodyPose) {
-    poseDebug.detectError = "bodyPose model not loaded";
+function tryStartFaceMesh() {
+  if (faceDetectStarted) return;
+  if (!faceMesh) {
+    faceDebug.detectError = "faceMesh model not loaded";
     return;
   }
   if (!video || !video.elt) return;
@@ -170,13 +176,13 @@ function tryStartBodyPose() {
   if (!ready) return;
 
   try {
-    bodyPose.detectStart(video, gotPoses);
-    poseDetectStarted = true;
-    poseDebug.detectStartAt = millis();
-    poseDebug.detectError = "";
+    faceMesh.detectStart(video, gotFaces);
+    faceDetectStarted = true;
+    faceDebug.detectStartAt = millis();
+    faceDebug.detectError = "";
   } catch (error) {
-    poseDebug.detectError = error?.message || String(error);
-    console.error("bodyPose detectStart failed", error);
+    faceDebug.detectError = error?.message || String(error);
+    console.error("faceMesh detectStart failed", error);
   }
 }
 
@@ -188,24 +194,24 @@ function setupSynth() {
   delayFx.process(piano, 0.18, 0.18, 1300);
 }
 
-function shouldLoadBodyPose() {
+function shouldLoadFaceMesh() {
   if (navigator.webdriver) {
-    bodyPoseLoadStatus = "skipped: webdriver";
+    faceMeshLoadStatus = "skipped: webdriver";
     return false;
   }
   const canvas = document.createElement("canvas");
   const ok = Boolean(canvas.getContext("webgl2") || canvas.getContext("webgl"));
-  bodyPoseLoadStatus = ok ? "webgl ok" : "skipped: no webgl";
+  faceMeshLoadStatus = ok ? "webgl ok" : "skipped: no webgl";
   return ok;
 }
 
-function gotPoses(results) {
-  poses = results || [];
-  poseDebug.lastPoseAt = millis();
-  poseDebug.lastPoseCount = poses.length;
-  poseDebug.lastKeypointCount = poses[0]?.keypoints?.length || 0;
-  const nose = poses[0] ? namedKeypoint(poses[0], "nose", 0) : null;
-  poseDebug.lastNoseConfidence = nose ? nose.confidence ?? nose.score ?? 0 : 0;
+function gotFaces(results) {
+  faces = results || [];
+  faceDebug.lastFaceAt = millis();
+  faceDebug.lastFaceCount = faces.length;
+  faceDebug.lastKeypointCount = faces[0]?.keypoints?.length || 0;
+  const nose = faces[0] ? noseKeypoint(faces[0]) : null;
+  faceDebug.lastNoseConfidence = confidenceOf(nose);
 }
 
 function buildNotes() {
@@ -344,7 +350,7 @@ function playMissSound() {
 
 function readPlayer() {
   updateFallbackInput();
-  const facePoint = trackedFacePoint();
+  const facePoint = trackedNosePoint();
 
   let target;
   let tracked = false;
@@ -369,27 +375,27 @@ function readPlayer() {
   return { x: smoothedPlayer.x, y: smoothedPlayer.y, tracked };
 }
 
-function trackedFacePoint() {
-  const pose = poses[0];
-  if (!pose || !pose.keypoints) {
-    poseDebug.lastTrackedPoint = null;
+function trackedNosePoint() {
+  const face = faces[0];
+  if (!face || !face.keypoints) {
+    faceDebug.lastTrackedPoint = null;
     return null;
   }
 
-  const nose = namedKeypoint(pose, "nose", 0);
-  if (isConfident(nose, NOSE_CONFIDENCE)) {
+  const nose = noseKeypoint(face);
+  if (nose) {
     const point = mirrorVideoPoint(nose);
-    poseDebug.lastTrackedPoint = point;
+    faceDebug.lastTrackedPoint = point;
     return point;
   }
 
-  const candidates = ["left_eye", "right_eye", "left_ear", "right_ear"]
-    .map((name) => namedKeypoint(pose, name))
-    .filter((point) => isConfident(point, 0.12))
+  const candidates = [4, 5, 6, 195, 197]
+    .map((index) => face.keypoints[index])
+    .filter(Boolean)
     .map(mirrorVideoPoint);
 
   if (candidates.length === 0) {
-    poseDebug.lastTrackedPoint = null;
+    faceDebug.lastTrackedPoint = null;
     return null;
   }
   const average = candidates.reduce(
@@ -397,32 +403,67 @@ function trackedFacePoint() {
     { x: 0, y: 0 }
   );
   const point = { x: average.x / candidates.length, y: average.y / candidates.length };
-  poseDebug.lastTrackedPoint = point;
+  faceDebug.lastTrackedPoint = point;
   return point;
 }
 
-function namedKeypoint(pose, name, fallbackIndex = -1) {
-  const found = pose.keypoints.find((point) => point.name === name || point.part === name);
-  return found || (fallbackIndex >= 0 ? pose.keypoints[fallbackIndex] : null);
+function noseKeypoint(face) {
+  if (!face || !face.keypoints) return null;
+  const named = face.keypoints.find((point) => {
+    const name = point.name || point.part || point.label || "";
+    return ["nose", "noseTip", "nose_tip"].includes(name);
+  });
+  return named || face.keypoints[1] || face.keypoints[4] || face.keypoints[0] || null;
 }
 
 function isConfident(point, threshold) {
   if (!point) return false;
-  const confidence = point.confidence ?? point.score ?? 0;
-  return confidence >= threshold;
+  const confidence = point.confidence ?? point.score;
+  return confidence === undefined || confidence >= threshold;
+}
+
+function confidenceOf(point) {
+  if (!point) return 0;
+  return point.confidence ?? point.score ?? 1;
 }
 
 function mirrorVideoPoint(point) {
   const stage = stageRect();
   const space = poseCoordinateSpace(point);
   const crop = cropRectForRatio(space.w, space.h, STAGE_RATIO);
-  const xInCrop = point.x - crop.x;
-  const yInCrop = point.y - crop.y;
+  const u = constrain((point.x - crop.x) / crop.w, -0.2, 1.2);
+  const v = constrain((point.y - crop.y) / crop.h, -0.2, 1.2);
+  const transformed = transformFaceUv(u, v);
 
   return {
-    x: stage.x + stage.w - (xInCrop / crop.w) * stage.w,
-    y: stage.y + (yInCrop / crop.h) * stage.h,
+    x: stage.x + transformed.u * stage.w,
+    y: stage.y + transformed.v * stage.h,
   };
+}
+
+function transformFaceUv(u, v) {
+  switch (FACE_TRANSFORM_MODES[faceTransformIndex]) {
+    case "direct":
+      return { u, v };
+    case "rotate-cw":
+      return { u: 1 - v, v: u };
+    case "rotate-ccw":
+      return { u: v, v: 1 - u };
+    case "rotate-180":
+      return { u: 1 - u, v: 1 - v };
+    case "mirror-rotate-cw":
+      return { u: v, v: u };
+    case "mirror-rotate-ccw":
+      return { u: 1 - v, v: 1 - u };
+    case "mirror":
+    default:
+      return { u: 1 - u, v };
+  }
+}
+
+function cycleFaceTransform() {
+  faceTransformIndex = (faceTransformIndex + 1) % FACE_TRANSFORM_MODES.length;
+  smoothedPlayer = null;
 }
 
 function updateFallbackInput() {
@@ -578,33 +619,34 @@ function drawPlayer(player) {
   pop();
 }
 
-function drawPoseDebug(player) {
+function drawFaceDebug(player) {
   const stage = stageRect();
-  drawPoseSkeletonOverlay();
+  drawFaceMeshOverlay();
 
   noFill();
   stroke(80, 214, 255, 210);
   strokeWeight(2);
   rect(stage.x + 1, stage.y + 1, stage.w - 2, stage.h - 2);
 
-  if (poseDebug.lastTrackedPoint) {
+  if (faceDebug.lastTrackedPoint) {
     noFill();
     stroke(255, 255, 255, 210);
     strokeWeight(2);
-    circle(poseDebug.lastTrackedPoint.x, poseDebug.lastTrackedPoint.y, playerRadiusPx() * 2.8);
+    circle(faceDebug.lastTrackedPoint.x, faceDebug.lastTrackedPoint.y, playerRadiusPx() * 2.8);
   }
 
   const source = videoSourceSize();
   const crop = cropRectForRatio(source.w, source.h, STAGE_RATIO);
-  const poseAge = poseDebug.lastPoseAt ? `${floor(millis() - poseDebug.lastPoseAt)}ms` : "never";
+  const faceAge = faceDebug.lastFaceAt ? `${floor(millis() - faceDebug.lastFaceAt)}ms` : "never";
   const lines = [
-    `debug pose ${poseDebugEnabled ? "ON" : "OFF"}`,
-    `secure:${window.isSecureContext ? "yes" : "no"}  model:${bodyPoseLoadStatus}`,
+    `debug face ${faceDebugEnabled ? "ON" : "OFF"}`,
+    `secure:${window.isSecureContext ? "yes" : "no"}  model:${faceMeshLoadStatus}`,
     `video ready:${video?.elt?.readyState ?? "-"}  ${source.w}x${source.h}`,
     `crop:${floor(crop.x)},${floor(crop.y)} ${floor(crop.w)}x${floor(crop.h)}`,
-    `detect:${poseDetectStarted ? "started" : "waiting"}  err:${poseDebug.detectError || "none"}`,
-    `poses:${poseDebug.lastPoseCount}  kp:${poseDebug.lastKeypointCount}  age:${poseAge}`,
-    `nose:${nf(poseDebug.lastNoseConfidence, 1, 2)}  tracked:${player.tracked ? "yes" : "no"}`,
+    `axis:${FACE_TRANSFORM_MODES[faceTransformIndex]}  tap3/M to change`,
+    `detect:${faceDetectStarted ? "started" : "waiting"}  err:${faceDebug.detectError || "none"}`,
+    `faces:${faceDebug.lastFaceCount}  kp:${faceDebug.lastKeypointCount}  age:${faceAge}`,
+    `nose:${nf(faceDebug.lastNoseConfidence, 1, 2)}  tracked:${player.tracked ? "yes" : "no"}`,
     `cat:${floor(player.x - stage.x)},${floor(player.y - stage.y)}`,
   ];
 
@@ -618,53 +660,43 @@ function drawPoseDebug(player) {
   textStyle(NORMAL);
   textSize(11);
   for (let i = 0; i < lines.length; i += 1) {
-    fill(i === 4 && poseDebug.detectError ? color(255, 95, 120) : color(255, 255, 255, 218));
+    fill(i === 5 && faceDebug.detectError ? color(255, 95, 120) : color(255, 255, 255, 218));
     text(lines[i], panelX + 10, panelY + 9 + i * 16);
   }
 
-  if (poses.length === 0) {
+  if (faces.length === 0) {
     textAlign(CENTER, CENTER);
     textStyle(BOLD);
     textSize(15);
     fill(255, 202, 87, 230);
-    text("NO BODYPOSE POINTS", stage.x + stage.w / 2, stage.y + stage.h - 184);
+    text("NO FACEMESH POINTS", stage.x + stage.w / 2, stage.y + stage.h - 184);
   }
 }
 
-function drawPoseSkeletonOverlay() {
-  if (!poses.length) return;
+function drawFaceMeshOverlay() {
+  if (!faces.length) return;
 
-  for (const pose of poses) {
-    if (!pose?.keypoints) continue;
+  for (const face of faces) {
+    if (!face?.keypoints) continue;
 
-    stroke(80, 214, 255, 175);
-    strokeWeight(2);
-    for (const connection of connections) {
-      const pointA = pose.keypoints[connection[0]];
-      const pointB = pose.keypoints[connection[1]];
-      if (!isConfident(pointA, 0.08) || !isConfident(pointB, 0.08)) continue;
-      const a = mirrorVideoPoint(pointA);
-      const b = mirrorVideoPoint(pointB);
-      line(a.x, a.y, b.x, b.y);
-    }
-
-    for (let i = 0; i < pose.keypoints.length; i += 1) {
-      const keypoint = pose.keypoints[i];
-      if (!isConfident(keypoint, 0.05)) continue;
+    const nose = noseKeypoint(face);
+    for (let i = 0; i < face.keypoints.length; i += 1) {
+      const keypoint = face.keypoints[i];
       const p = mirrorVideoPoint(keypoint);
       const name = keypoint.name || keypoint.part || `${i}`;
-      const confidence = keypoint.confidence ?? keypoint.score ?? 0;
-      const isNose = name === "nose" || i === 0;
+      const isNose = keypoint === nose;
 
       noStroke();
-      fill(isNose ? color(255, 105, 180, 245) : color(130, 255, 130, 220));
-      circle(p.x, p.y, isNose ? 13 : 8);
+      fill(isNose ? color(255, 105, 180, 245) : color(130, 255, 130, 155));
+      circle(p.x, p.y, isNose ? 14 : 4);
 
-      fill(255, 255, 255, 210);
-      textAlign(LEFT, CENTER);
-      textStyle(NORMAL);
-      textSize(9);
-      text(`${i}:${name} ${nf(confidence, 1, 2)}`, p.x + 7, p.y);
+      if (isNose || i % 20 === 0) {
+        fill(255, 255, 255, 210);
+        textAlign(LEFT, CENTER);
+        textStyle(NORMAL);
+        textSize(9);
+        text(`${i}:${name}`, p.x + 7, p.y);
+      }
     }
   }
 }
@@ -824,8 +856,12 @@ function showJudge(label, judgeColor) {
 }
 
 function keyPressed() {
+  if (key === "m" || key === "M") {
+    cycleFaceTransform();
+    return false;
+  }
   if (key === "d" || key === "D") {
-    poseDebugEnabled = !poseDebugEnabled;
+    faceDebugEnabled = !faceDebugEnabled;
     return false;
   }
   if (key === " " || keyCode === ENTER) {
@@ -849,8 +885,12 @@ function mousePressed() {
 }
 
 function touchStarted() {
+  if (touches.length >= 3) {
+    cycleFaceTransform();
+    return false;
+  }
   if (touches.length >= 2) {
-    poseDebugEnabled = !poseDebugEnabled;
+    faceDebugEnabled = !faceDebugEnabled;
     return false;
   }
   if (gameState === "ready" || gameState === "finished") beginGame();
