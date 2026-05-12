@@ -1,6 +1,7 @@
 let video;
 let bodyPose;
 let poses = [];
+let connections = [];
 let easyChart;
 let piano;
 let reverb;
@@ -22,6 +23,19 @@ let lastJudgeAt = 0;
 let smoothedPlayer = null;
 let fallbackPlayer = null;
 let audioReady = false;
+let poseDetectStarted = false;
+let poseDebugEnabled = true;
+let bodyPoseLoadStatus = "not checked";
+let poseDebug = {
+  cameraCallbackAt: 0,
+  detectStartAt: 0,
+  detectError: "",
+  lastPoseAt: 0,
+  lastPoseCount: 0,
+  lastKeypointCount: 0,
+  lastNoseConfidence: 0,
+  lastTrackedPoint: null,
+};
 
 const CHART_PATH = "assets/mania/pretender-easy.json";
 const CAMERA_W = 360;
@@ -72,6 +86,7 @@ function preload() {
   easyChart = loadJSON(CHART_PATH);
   if (shouldLoadBodyPose()) {
     bodyPose = ml5.bodyPose();
+    bodyPoseLoadStatus = "created";
   }
 }
 
@@ -84,10 +99,14 @@ function setup() {
   setupCamera();
   setupSynth();
   buildNotes();
+  if (bodyPose && typeof bodyPose.getSkeleton === "function") {
+    connections = bodyPose.getSkeleton();
+  }
   gameState = "ready";
 }
 
 function draw() {
+  tryStartBodyPose();
   drawScene();
   const player = readPlayer();
 
@@ -109,6 +128,7 @@ function draw() {
   if (gameState === "ready") drawStartScreen(player);
   if (gameState === "countdown") drawCountdown();
   if (gameState === "finished") drawFinishScreen();
+  if (poseDebugEnabled) drawPoseDebug(player);
 }
 
 function setupCamera() {
@@ -122,13 +142,41 @@ function setupCamera() {
       facingMode: "user",
     },
     audio: false,
+  }, () => {
+    poseDebug.cameraCallbackAt = millis();
+    tryStartBodyPose();
   });
   video.size(CAMERA_W, CAMERA_H);
   video.elt.setAttribute("playsinline", "");
+  video.elt.setAttribute("muted", "");
+  video.elt.muted = true;
+  video.elt.addEventListener("loadedmetadata", tryStartBodyPose);
+  video.elt.addEventListener("loadeddata", tryStartBodyPose);
+  video.elt.addEventListener("canplay", tryStartBodyPose);
+  video.elt.addEventListener("playing", tryStartBodyPose);
   video.hide();
+}
 
-  if (bodyPose) {
+function tryStartBodyPose() {
+  if (poseDetectStarted) return;
+  if (!bodyPose) {
+    poseDebug.detectError = "bodyPose model not loaded";
+    return;
+  }
+  if (!video || !video.elt) return;
+
+  const source = videoSourceSize();
+  const ready = video.elt.readyState >= 2 && source.w > 0 && source.h > 0;
+  if (!ready) return;
+
+  try {
     bodyPose.detectStart(video, gotPoses);
+    poseDetectStarted = true;
+    poseDebug.detectStartAt = millis();
+    poseDebug.detectError = "";
+  } catch (error) {
+    poseDebug.detectError = error?.message || String(error);
+    console.error("bodyPose detectStart failed", error);
   }
 }
 
@@ -141,13 +189,23 @@ function setupSynth() {
 }
 
 function shouldLoadBodyPose() {
-  if (navigator.webdriver) return false;
+  if (navigator.webdriver) {
+    bodyPoseLoadStatus = "skipped: webdriver";
+    return false;
+  }
   const canvas = document.createElement("canvas");
-  return Boolean(canvas.getContext("webgl2") || canvas.getContext("webgl"));
+  const ok = Boolean(canvas.getContext("webgl2") || canvas.getContext("webgl"));
+  bodyPoseLoadStatus = ok ? "webgl ok" : "skipped: no webgl";
+  return ok;
 }
 
 function gotPoses(results) {
   poses = results || [];
+  poseDebug.lastPoseAt = millis();
+  poseDebug.lastPoseCount = poses.length;
+  poseDebug.lastKeypointCount = poses[0]?.keypoints?.length || 0;
+  const nose = poses[0] ? namedKeypoint(poses[0], "nose", 0) : null;
+  poseDebug.lastNoseConfidence = nose ? nose.confidence ?? nose.score ?? 0 : 0;
 }
 
 function buildNotes() {
@@ -313,22 +371,34 @@ function readPlayer() {
 
 function trackedFacePoint() {
   const pose = poses[0];
-  if (!pose || !pose.keypoints) return null;
+  if (!pose || !pose.keypoints) {
+    poseDebug.lastTrackedPoint = null;
+    return null;
+  }
 
   const nose = namedKeypoint(pose, "nose", 0);
-  if (isConfident(nose, NOSE_CONFIDENCE)) return mirrorVideoPoint(nose);
+  if (isConfident(nose, NOSE_CONFIDENCE)) {
+    const point = mirrorVideoPoint(nose);
+    poseDebug.lastTrackedPoint = point;
+    return point;
+  }
 
   const candidates = ["left_eye", "right_eye", "left_ear", "right_ear"]
     .map((name) => namedKeypoint(pose, name))
     .filter((point) => isConfident(point, 0.12))
     .map(mirrorVideoPoint);
 
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0) {
+    poseDebug.lastTrackedPoint = null;
+    return null;
+  }
   const average = candidates.reduce(
     (sum, point) => ({ x: sum.x + point.x, y: sum.y + point.y }),
     { x: 0, y: 0 }
   );
-  return { x: average.x / candidates.length, y: average.y / candidates.length };
+  const point = { x: average.x / candidates.length, y: average.y / candidates.length };
+  poseDebug.lastTrackedPoint = point;
+  return point;
 }
 
 function namedKeypoint(pose, name, fallbackIndex = -1) {
@@ -506,6 +576,97 @@ function drawPlayer(player) {
   circle(0, 0, r * 2.15);
   drawingContext.shadowBlur = 0;
   pop();
+}
+
+function drawPoseDebug(player) {
+  const stage = stageRect();
+  drawPoseSkeletonOverlay();
+
+  noFill();
+  stroke(80, 214, 255, 210);
+  strokeWeight(2);
+  rect(stage.x + 1, stage.y + 1, stage.w - 2, stage.h - 2);
+
+  if (poseDebug.lastTrackedPoint) {
+    noFill();
+    stroke(255, 255, 255, 210);
+    strokeWeight(2);
+    circle(poseDebug.lastTrackedPoint.x, poseDebug.lastTrackedPoint.y, playerRadiusPx() * 2.8);
+  }
+
+  const source = videoSourceSize();
+  const crop = cropRectForRatio(source.w, source.h, STAGE_RATIO);
+  const poseAge = poseDebug.lastPoseAt ? `${floor(millis() - poseDebug.lastPoseAt)}ms` : "never";
+  const lines = [
+    `debug pose ${poseDebugEnabled ? "ON" : "OFF"}`,
+    `secure:${window.isSecureContext ? "yes" : "no"}  model:${bodyPoseLoadStatus}`,
+    `video ready:${video?.elt?.readyState ?? "-"}  ${source.w}x${source.h}`,
+    `crop:${floor(crop.x)},${floor(crop.y)} ${floor(crop.w)}x${floor(crop.h)}`,
+    `detect:${poseDetectStarted ? "started" : "waiting"}  err:${poseDebug.detectError || "none"}`,
+    `poses:${poseDebug.lastPoseCount}  kp:${poseDebug.lastKeypointCount}  age:${poseAge}`,
+    `nose:${nf(poseDebug.lastNoseConfidence, 1, 2)}  tracked:${player.tracked ? "yes" : "no"}`,
+    `cat:${floor(player.x - stage.x)},${floor(player.y - stage.y)}`,
+  ];
+
+  const panelX = stage.x + 8;
+  const panelY = stage.y + stage.h - 154;
+  noStroke();
+  fill(0, 0, 0, 174);
+  rect(panelX, panelY, min(stage.w - 16, 336), 146, 8);
+
+  textAlign(LEFT, TOP);
+  textStyle(NORMAL);
+  textSize(11);
+  for (let i = 0; i < lines.length; i += 1) {
+    fill(i === 4 && poseDebug.detectError ? color(255, 95, 120) : color(255, 255, 255, 218));
+    text(lines[i], panelX + 10, panelY + 9 + i * 16);
+  }
+
+  if (poses.length === 0) {
+    textAlign(CENTER, CENTER);
+    textStyle(BOLD);
+    textSize(15);
+    fill(255, 202, 87, 230);
+    text("NO BODYPOSE POINTS", stage.x + stage.w / 2, stage.y + stage.h - 184);
+  }
+}
+
+function drawPoseSkeletonOverlay() {
+  if (!poses.length) return;
+
+  for (const pose of poses) {
+    if (!pose?.keypoints) continue;
+
+    stroke(80, 214, 255, 175);
+    strokeWeight(2);
+    for (const connection of connections) {
+      const pointA = pose.keypoints[connection[0]];
+      const pointB = pose.keypoints[connection[1]];
+      if (!isConfident(pointA, 0.08) || !isConfident(pointB, 0.08)) continue;
+      const a = mirrorVideoPoint(pointA);
+      const b = mirrorVideoPoint(pointB);
+      line(a.x, a.y, b.x, b.y);
+    }
+
+    for (let i = 0; i < pose.keypoints.length; i += 1) {
+      const keypoint = pose.keypoints[i];
+      if (!isConfident(keypoint, 0.05)) continue;
+      const p = mirrorVideoPoint(keypoint);
+      const name = keypoint.name || keypoint.part || `${i}`;
+      const confidence = keypoint.confidence ?? keypoint.score ?? 0;
+      const isNose = name === "nose" || i === 0;
+
+      noStroke();
+      fill(isNose ? color(255, 105, 180, 245) : color(130, 255, 130, 220));
+      circle(p.x, p.y, isNose ? 13 : 8);
+
+      fill(255, 255, 255, 210);
+      textAlign(LEFT, CENTER);
+      textStyle(NORMAL);
+      textSize(9);
+      text(`${i}:${name} ${nf(confidence, 1, 2)}`, p.x + 7, p.y);
+    }
+  }
 }
 
 function addBurst(x, y, rgb, success, label) {
