@@ -24,15 +24,17 @@ let fallbackPlayer = null;
 let audioReady = false;
 
 const CHART_PATH = "assets/mania/pretender-easy.json";
-const VIDEO_W = 320;
-const VIDEO_H = 480;
+const CAMERA_W = 360;
+const CAMERA_H = 640;
+const STAGE_RATIO = 9 / 16;
 const APPROACH_TIME = 1850;
+const NOTE_EXIT_AFTER_BEAT = 1150;
 const HIT_WINDOW = 150;
 const PLAYER_RADIUS_RATIO = 0.068;
 const NOTE_RADIUS_RATIO = 0.045;
 const TOP_UI_H = 86;
 const PLAY_TOP_RATIO = 0.14;
-const PLAY_BOTTOM_RATIO = 0.74;
+const IDEAL_NOTE_Y_RATIO = 0.5;
 const MAX_NOTES = 220;
 const SMOOTHING = 0.42;
 const NOSE_CONFIDENCE = 0.18;
@@ -77,7 +79,8 @@ function setup() {
   pixelDensity(1);
   createCanvas(windowWidth, windowHeight);
   textFont("Arial");
-  fallbackPlayer = createVector(width / 2, height * 0.72);
+  const stage = stageRect();
+  fallbackPlayer = createVector(stage.x + stage.w / 2, stage.y + stage.h * 0.62);
   setupCamera();
   setupSynth();
   buildNotes();
@@ -111,14 +114,16 @@ function draw() {
 function setupCamera() {
   video = createCapture({
     video: {
-      width: { ideal: VIDEO_W },
-      height: { ideal: VIDEO_H },
+      width: { ideal: CAMERA_W },
+      height: { ideal: CAMERA_H },
+      aspectRatio: { ideal: STAGE_RATIO },
+      resizeMode: "crop-and-scale",
       frameRate: { ideal: 30, max: 30 },
       facingMode: "user",
     },
     audio: false,
   });
-  video.size(VIDEO_W, VIDEO_H);
+  video.size(CAMERA_W, CAMERA_H);
   video.elt.setAttribute("playsinline", "");
   video.hide();
 
@@ -220,9 +225,9 @@ function updateNotes(gameTime, player) {
     const timingDelta = abs(signedTimingDelta);
     const distanceNow = dist(player.x, player.y, pos.x, pos.y);
 
-    if (pos.progress >= 0 && distanceNow <= playerRadius + noteRadius) {
+    if (pos.visible && distanceNow <= playerRadius + noteRadius) {
       hitNote(note, pos, signedTimingDelta);
-    } else if (gameTime > note.time + HIT_WINDOW) {
+    } else if (gameTime > note.time + NOTE_EXIT_AFTER_BEAT) {
       missNote(note, pos);
     }
   }
@@ -338,15 +343,21 @@ function isConfident(point, threshold) {
 }
 
 function mirrorVideoPoint(point) {
-  const rect = videoRect();
+  const stage = stageRect();
+  const space = poseCoordinateSpace(point);
+  const crop = cropRectForRatio(space.w, space.h, STAGE_RATIO);
+  const xInCrop = point.x - crop.x;
+  const yInCrop = point.y - crop.y;
+
   return {
-    x: rect.x + rect.w - (point.x / video.width) * rect.w,
-    y: rect.y + (point.y / video.height) * rect.h,
+    x: stage.x + stage.w - (xInCrop / crop.w) * stage.w,
+    y: stage.y + (yInCrop / crop.h) * stage.h,
   };
 }
 
 function updateFallbackInput() {
-  const speed = max(5, width * 0.018);
+  const stage = stageRect();
+  const speed = max(5, stage.w * 0.018);
   if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) fallbackPlayer.x -= speed;
   if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) fallbackPlayer.x += speed;
   if (keyIsDown(UP_ARROW) || keyIsDown(87)) fallbackPlayer.y -= speed;
@@ -364,68 +375,69 @@ function updateFallbackInput() {
 
 function keepInPlayArea(point) {
   const r = playerRadiusPx();
+  const stage = stageRect();
   return {
-    x: constrain(point.x, r + 14, width - r - 14),
-    y: constrain(point.y, playTopY() + r, playBottomY() - r),
+    x: constrain(point.x, stage.x + r + 14, stage.x + stage.w - r - 14),
+    y: constrain(point.y, stage.y + TOP_UI_H + r, stage.y + stage.h - r - 14),
   };
 }
 
 function notePosition(note, gameTime) {
-  const progress = (gameTime - (note.time - APPROACH_TIME)) / APPROACH_TIME;
-  const y = lerp(playTopY() - 80, playBottomY() + 32, constrain(progress, 0, 1.18));
+  const stage = stageRect();
+  const delta = gameTime - note.time;
+  const topY = playTopY() - noteRadiusPx() * 2.4;
+  const idealY = idealNoteY();
+  const exitY = stage.y + stage.h + noteRadiusPx() * 3;
+  const beforeBeatProgress = (gameTime - (note.time - APPROACH_TIME)) / APPROACH_TIME;
+  const afterBeatProgress = delta / NOTE_EXIT_AFTER_BEAT;
+  const y =
+    delta <= 0
+      ? lerp(topY, idealY, constrain(beforeBeatProgress, 0, 1))
+      : lerp(idealY, exitY, constrain(afterBeatProgress, 0, 1.2));
+
   return {
-    x: lerp(width * 0.12, width * 0.88, note.xProgress),
+    x: lerp(stage.x + stage.w * 0.12, stage.x + stage.w * 0.88, note.xProgress),
     y,
-    progress,
+    progress: delta <= 0 ? beforeBeatProgress : 1 + afterBeatProgress,
+    visible: beforeBeatProgress >= 0 && afterBeatProgress <= 1.15,
   };
 }
 
 function drawScene() {
   background(7, 8, 13);
   if (video && video.loadedmetadata) {
-    const rect = videoRect();
-    push();
-    translate(rect.x + rect.w, rect.y);
-    scale(-1, 1);
-    tint(255, 120);
-    image(video, 0, 0, rect.w, rect.h);
-    noTint();
-    pop();
+    drawMirroredCamera();
   }
 
   noStroke();
   fill(5, 5, 10, 118);
   rect(0, 0, width, height);
 
-  const glowY = height * 0.24 + sin(frameCount * 0.018) * 18;
+  const stage = stageRect();
+  const glowY = stage.y + stage.h * 0.24 + sin(frameCount * 0.018) * 18;
   for (let i = 0; i < 7; i += 1) {
     fill(255, 105, 180, 18 - i * 2);
-    ellipse(width * 0.52, glowY, width * (0.42 + i * 0.14), width * (0.22 + i * 0.08));
+    ellipse(stage.x + stage.w * 0.52, glowY, stage.w * (0.42 + i * 0.14), stage.w * (0.22 + i * 0.08));
   }
 }
 
 function drawTrack(gameTime) {
+  const stage = stageRect();
   const top = playTopY();
-  const bottom = playBottomY();
+  const bottom = stage.y + stage.h;
 
   stroke(255, 255, 255, 28);
   strokeWeight(1);
   for (let lane = 0; lane < 8; lane += 1) {
-    const x = lerp(width * 0.12, width * 0.88, (lane + 0.5) / 8);
+    const x = lerp(stage.x + stage.w * 0.12, stage.x + stage.w * 0.88, (lane + 0.5) / 8);
     line(x, top, x, bottom);
   }
 
-  stroke(255, 255, 255, 108);
-  strokeWeight(2);
-  line(width * 0.08, bottom, width * 0.92, bottom);
-  noStroke();
-  fill(255, 105, 180, 54);
-  rect(width * 0.08, bottom - 3, width * 0.84, 6, 8);
-
   for (const note of notes) {
     if (note.judged && note.hit) continue;
-    if (gameTime < note.time - APPROACH_TIME || gameTime > note.time + 500) continue;
     const pos = notePosition(note, gameTime);
+    if (!pos.visible && gameTime <= note.time + NOTE_EXIT_AFTER_BEAT) continue;
+    if (gameTime > note.time + NOTE_EXIT_AFTER_BEAT + 240) continue;
     const alpha = note.judged ? 90 : map(pos.progress, 0, 0.2, 0, 255, true);
     drawNote(note, pos.x, pos.y, alpha);
   }
@@ -531,43 +543,45 @@ function drawHitBursts() {
 }
 
 function drawHud() {
+  const stage = stageRect();
   const total = hits + misses;
   const accuracy = total === 0 ? 100 : (hits / total) * 100;
 
   noStroke();
   fill(0, 0, 0, 142);
-  rect(0, 0, width, TOP_UI_H);
+  rect(stage.x, stage.y, stage.w, TOP_UI_H);
 
   textAlign(LEFT, CENTER);
   textStyle(BOLD);
   fill(255);
   textSize(18);
-  text("Nose Piano", 18, 24);
+  text("Nose Piano", stage.x + 18, stage.y + 24);
   textStyle(NORMAL);
   fill(255, 255, 255, 170);
   textSize(12);
-  text("Move your nose into falling notes", 18, 49);
+  text("Move your nose into falling notes", stage.x + 18, stage.y + 49);
 
   textAlign(RIGHT, CENTER);
   textStyle(BOLD);
   fill(255);
   textSize(24);
-  text(nf(score, 6, 0), width - 18, 24);
+  text(nf(score, 6, 0), stage.x + stage.w - 18, stage.y + 24);
   textStyle(NORMAL);
   textSize(12);
   fill(255, 255, 255, 175);
-  text(`${combo} combo  ${hits}/${total}  ${nf(accuracy, 2, 1)}%`, width - 18, 50);
+  text(`${combo} combo  ${hits}/${total}  ${nf(accuracy, 2, 1)}%`, stage.x + stage.w - 18, stage.y + 50);
 
   if (lastJudge && millis() - lastJudgeAt < 560) {
     textAlign(CENTER, CENTER);
     textStyle(BOLD);
     textSize(28);
     fill(lastJudge.color);
-    text(lastJudge.label, width / 2, TOP_UI_H + 28);
+    text(lastJudge.label, stage.x + stage.w / 2, stage.y + TOP_UI_H + 28);
   }
 }
 
 function drawStartScreen(player) {
+  const stage = stageRect();
   drawScrim(138);
   drawPlayer(player);
 
@@ -575,13 +589,19 @@ function drawStartScreen(player) {
   noStroke();
   fill(255);
   textStyle(BOLD);
-  textSize(min(width * 0.12, 50));
-  text("Nose Piano", width / 2, height * 0.24);
+  textSize(min(stage.w * 0.12, 50));
+  text("Nose Piano", stage.x + stage.w / 2, stage.y + stage.h * 0.24);
 
   textStyle(NORMAL);
   fill(255, 255, 255, 205);
   textSize(15);
-  text("코 위치에 있는 캐릭터로 노트를 받아요.\n맞으면 피아노 음이 나고, 놓치면 음악이 무너집니다.", width * 0.12, height * 0.32, width * 0.76, 70);
+  text(
+    "코 위치에 있는 캐릭터로 노트를 받아요.\n맞으면 피아노 음이 나고, 놓치면 음악이 무너집니다.",
+    stage.x + stage.w * 0.12,
+    stage.y + stage.h * 0.32,
+    stage.w * 0.76,
+    70
+  );
 
   const btn = startButtonRect();
   fill(255, 105, 180);
@@ -594,20 +614,22 @@ function drawStartScreen(player) {
   textStyle(NORMAL);
   fill(255, 255, 255, 150);
   textSize(12);
-  text("카메라 허용 후 세로 화면으로 플레이", width / 2, btn.y + btn.h + 32);
+  text("카메라 허용 후 세로 화면으로 플레이", stage.x + stage.w / 2, btn.y + btn.h + 32);
 }
 
 function drawCountdown() {
+  const stage = stageRect();
   drawScrim(112);
   const number = max(1, 3 - floor((millis() - countdownStartedAt) / 800));
   textAlign(CENTER, CENTER);
   textStyle(BOLD);
-  textSize(min(width, height) * 0.22);
+  textSize(min(stage.w, stage.h) * 0.22);
   fill(255);
-  text(number, width / 2, height / 2);
+  text(number, stage.x + stage.w / 2, stage.y + stage.h / 2);
 }
 
 function drawFinishScreen() {
+  const stage = stageRect();
   drawScrim(162);
   const total = hits + misses;
   const accuracy = total === 0 ? 100 : (hits / total) * 100;
@@ -616,23 +638,23 @@ function drawFinishScreen() {
   noStroke();
   fill(255);
   textStyle(BOLD);
-  textSize(min(width * 0.12, 52));
-  text("FINISH", width / 2, height * 0.28);
+  textSize(min(stage.w * 0.12, 52));
+  text("FINISH", stage.x + stage.w / 2, stage.y + stage.h * 0.28);
 
   textStyle(NORMAL);
   textSize(20);
   fill(255, 255, 255, 220);
-  text(`Score ${nf(score, 1, 0)}`, width / 2, height * 0.39);
-  text(`Hit ${hits}/${total}   ${nf(accuracy, 2, 1)}%`, width / 2, height * 0.45);
-  text(`Max Combo ${maxCombo}`, width / 2, height * 0.51);
+  text(`Score ${nf(score, 1, 0)}`, stage.x + stage.w / 2, stage.y + stage.h * 0.39);
+  text(`Hit ${hits}/${total}   ${nf(accuracy, 2, 1)}%`, stage.x + stage.w / 2, stage.y + stage.h * 0.45);
+  text(`Max Combo ${maxCombo}`, stage.x + stage.w / 2, stage.y + stage.h * 0.51);
 
   const btn = startButtonRect();
   fill(255, 105, 180);
-  rect(btn.x, height * 0.62, btn.w, btn.h, 16);
+  rect(btn.x, stage.y + stage.h * 0.62, btn.w, btn.h, 16);
   fill(255);
   textStyle(BOLD);
   textSize(17);
-  text("REPLAY", btn.x + btn.w / 2, height * 0.62 + btn.h / 2);
+  text("REPLAY", btn.x + btn.w / 2, stage.y + stage.h * 0.62 + btn.h / 2);
 }
 
 function showJudge(label, judgeColor) {
@@ -668,17 +690,19 @@ function touchStarted() {
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
-  fallbackPlayer = createVector(width / 2, height * 0.72);
+  const stage = stageRect();
+  fallbackPlayer = createVector(stage.x + stage.w / 2, stage.y + stage.h * 0.62);
   smoothedPlayer = null;
   buildNotes();
 }
 
 function startButtonRect() {
-  const w = min(width * 0.72, 320);
+  const stage = stageRect();
+  const w = min(stage.w * 0.72, 320);
   const h = 58;
   return {
-    x: (width - w) / 2,
-    y: height * 0.58,
+    x: stage.x + (stage.w - w) / 2,
+    y: stage.y + stage.h * 0.58,
     w,
     h,
   };
@@ -694,16 +718,17 @@ function drawScrim(alpha) {
   rect(0, 0, width, height);
 }
 
-function videoRect() {
-  const videoRatio = video.width / video.height;
+function stageRect() {
   const canvasRatio = width / height;
   let w = width;
   let h = height;
 
-  if (canvasRatio > videoRatio) {
-    h = width / videoRatio;
+  if (canvasRatio > STAGE_RATIO) {
+    h = height;
+    w = h * STAGE_RATIO;
   } else {
-    w = height * videoRatio;
+    w = width;
+    h = w / STAGE_RATIO;
   }
 
   return {
@@ -714,18 +739,68 @@ function videoRect() {
   };
 }
 
-function playTopY() {
-  return max(TOP_UI_H + 28, height * PLAY_TOP_RATIO);
+function drawMirroredCamera() {
+  const stage = stageRect();
+  const source = videoSourceSize();
+  const crop = cropRectForRatio(source.w, source.h, STAGE_RATIO);
+
+  push();
+  drawingContext.save();
+  drawingContext.translate(stage.x + stage.w, stage.y);
+  drawingContext.scale(-1, 1);
+  drawingContext.globalAlpha = 0.72;
+  drawingContext.drawImage(video.elt, crop.x, crop.y, crop.w, crop.h, 0, 0, stage.w, stage.h);
+  drawingContext.globalAlpha = 1;
+  drawingContext.restore();
+  pop();
 }
 
-function playBottomY() {
-  return height * PLAY_BOTTOM_RATIO;
+function videoSourceSize() {
+  return {
+    w: video?.elt?.videoWidth || video?.width || CAMERA_W,
+    h: video?.elt?.videoHeight || video?.height || CAMERA_H,
+  };
+}
+
+function poseCoordinateSpace(point) {
+  const natural = videoSourceSize();
+  const display = { w: video?.width || CAMERA_W, h: video?.height || CAMERA_H };
+  if (point.x > display.w + 1 || point.y > display.h + 1) return natural;
+  return display;
+}
+
+function cropRectForRatio(sourceW, sourceH, ratio) {
+  const sourceRatio = sourceW / sourceH;
+  let x = 0;
+  let y = 0;
+  let w = sourceW;
+  let h = sourceH;
+
+  if (sourceRatio > ratio) {
+    w = sourceH * ratio;
+    x = (sourceW - w) / 2;
+  } else {
+    h = sourceW / ratio;
+    y = (sourceH - h) / 2;
+  }
+
+  return { x, y, w, h };
+}
+
+function playTopY() {
+  const stage = stageRect();
+  return max(stage.y + TOP_UI_H + 28, stage.y + stage.h * PLAY_TOP_RATIO);
+}
+
+function idealNoteY() {
+  const stage = stageRect();
+  return stage.y + stage.h * IDEAL_NOTE_Y_RATIO;
 }
 
 function playerRadiusPx() {
-  return constrain(width * PLAYER_RADIUS_RATIO, 24, 42);
+  return constrain(stageRect().w * PLAYER_RADIUS_RATIO, 24, 42);
 }
 
 function noteRadiusPx() {
-  return constrain(width * NOTE_RADIUS_RATIO, 17, 30);
+  return constrain(stageRect().w * NOTE_RADIUS_RATIO, 17, 30);
 }
