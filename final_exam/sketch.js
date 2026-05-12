@@ -824,6 +824,10 @@ function showJudge(label, judgeColor) {
 }
 
 function keyPressed() {
+  if (key === "d" || key === "D") {
+    poseDebugEnabled = !poseDebugEnabled;
+    return false;
+  }
   if (key === " " || keyCode === ENTER) {
     if (gameState === "ready" || gameState === "finished") beginGame();
     return false;
@@ -845,6 +849,10 @@ function mousePressed() {
 }
 
 function touchStarted() {
+  if (touches.length >= 2) {
+    poseDebugEnabled = !poseDebugEnabled;
+    return false;
+  }
   if (gameState === "ready" || gameState === "finished") beginGame();
   return false;
 }
