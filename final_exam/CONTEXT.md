@@ -29,7 +29,7 @@ _Avoid_: catch line, wait zone
 - Chart lane data controls each note's x position and assigned pitch.
 - The camera request, displayed camera crop, playfield, and faceMesh coordinate mapping all use the same 9:16 stage.
 - faceMesh controls the character with the user's nose landmark, so the game works even when only the face is visible.
-- Touch, mouse, and arrow keys are only fallback controls for testing.
+- Character position is derived from the camera face point only; touch, drag, mouse, and arrow input do not move it.
 - A note sounds when it physically collides with the character anywhere in the 9:16 stage.
 - On-beat collisions increase score and combo.
 - Off-beat collisions still trigger the pitch, but reset combo and count against accuracy so the melody sounds mistimed.

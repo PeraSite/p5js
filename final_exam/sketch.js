@@ -20,7 +20,7 @@ let misses = 0;
 let lastJudge = null;
 let lastJudgeAt = 0;
 let smoothedPlayer = null;
-let fallbackPlayer = null;
+let restingPlayer = null;
 let audioReady = false;
 let faceDetectStarted = false;
 let faceDebugEnabled = true;
@@ -104,7 +104,7 @@ function setup() {
   createCanvas(windowWidth, windowHeight);
   textFont("Arial");
   const stage = stageRect();
-  fallbackPlayer = createVector(stage.x + stage.w / 2, stage.y + stage.h * 0.62);
+  restingPlayer = createVector(stage.x + stage.w / 2, stage.y + stage.h * 0.62);
   setupCamera();
   setupSynth();
   buildNotes();
@@ -349,19 +349,16 @@ function playMissSound() {
 }
 
 function readPlayer() {
-  updateFallbackInput();
   const facePoint = trackedNosePoint();
 
-  let target;
-  let tracked = false;
-  if (facePoint) {
-    target = facePoint;
-    tracked = true;
-  } else {
-    target = { x: fallbackPlayer.x, y: fallbackPlayer.y };
+  if (!facePoint) {
+    const resting = smoothedPlayer || restingPlayer;
+    const safeResting = keepInPlayArea(resting);
+    if (!smoothedPlayer) smoothedPlayer = createVector(safeResting.x, safeResting.y);
+    return { x: safeResting.x, y: safeResting.y, tracked: false };
   }
 
-  target = keepInPlayArea(target);
+  const target = keepInPlayArea(facePoint);
 
   if (!smoothedPlayer) {
     smoothedPlayer = createVector(target.x, target.y);
@@ -372,7 +369,7 @@ function readPlayer() {
 
   const safe = keepInPlayArea(smoothedPlayer);
   smoothedPlayer.set(safe.x, safe.y);
-  return { x: smoothedPlayer.x, y: smoothedPlayer.y, tracked };
+  return { x: smoothedPlayer.x, y: smoothedPlayer.y, tracked: true };
 }
 
 function trackedNosePoint() {
@@ -464,24 +461,6 @@ function transformFaceUv(u, v) {
 function cycleFaceTransform() {
   faceTransformIndex = (faceTransformIndex + 1) % FACE_TRANSFORM_MODES.length;
   smoothedPlayer = null;
-}
-
-function updateFallbackInput() {
-  const stage = stageRect();
-  const speed = max(5, stage.w * 0.018);
-  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) fallbackPlayer.x -= speed;
-  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) fallbackPlayer.x += speed;
-  if (keyIsDown(UP_ARROW) || keyIsDown(87)) fallbackPlayer.y -= speed;
-  if (keyIsDown(DOWN_ARROW) || keyIsDown(83)) fallbackPlayer.y += speed;
-  if (touches.length > 0) {
-    fallbackPlayer.x = touches[0].x;
-    fallbackPlayer.y = touches[0].y;
-  } else if (mouseIsPressed) {
-    fallbackPlayer.x = mouseX;
-    fallbackPlayer.y = mouseY;
-  }
-  const safe = keepInPlayArea(fallbackPlayer);
-  fallbackPlayer.set(safe.x, safe.y);
 }
 
 function keepInPlayArea(point) {
@@ -643,7 +622,7 @@ function drawFaceDebug(player) {
     `secure:${window.isSecureContext ? "yes" : "no"}  model:${faceMeshLoadStatus}`,
     `video ready:${video?.elt?.readyState ?? "-"}  ${source.w}x${source.h}`,
     `crop:${floor(crop.x)},${floor(crop.y)} ${floor(crop.w)}x${floor(crop.h)}`,
-    `axis:${FACE_TRANSFORM_MODES[faceTransformIndex]}  tap3/M to change`,
+    `axis:${FACE_TRANSFORM_MODES[faceTransformIndex]}  tap/M to change`,
     `detect:${faceDetectStarted ? "started" : "waiting"}  err:${faceDebug.detectError || "none"}`,
     `faces:${faceDebug.lastFaceCount}  kp:${faceDebug.lastKeypointCount}  age:${faceAge}`,
     `nose:${nf(faceDebug.lastNoseConfidence, 1, 2)}  tracked:${player.tracked ? "yes" : "no"}`,
@@ -885,22 +864,23 @@ function mousePressed() {
 }
 
 function touchStarted() {
-  if (touches.length >= 3) {
-    cycleFaceTransform();
-    return false;
-  }
-  if (touches.length >= 2) {
-    faceDebugEnabled = !faceDebugEnabled;
-    return false;
-  }
+  cycleFaceTransform();
   if (gameState === "ready" || gameState === "finished") beginGame();
+  return false;
+}
+
+function touchMoved() {
+  return false;
+}
+
+function mouseDragged() {
   return false;
 }
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
   const stage = stageRect();
-  fallbackPlayer = createVector(stage.x + stage.w / 2, stage.y + stage.h * 0.62);
+  restingPlayer = createVector(stage.x + stage.w / 2, stage.y + stage.h * 0.62);
   smoothedPlayer = null;
   buildNotes();
 }
