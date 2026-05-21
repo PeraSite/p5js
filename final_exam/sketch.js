@@ -21,6 +21,7 @@ let misses = 0;
 let judge = "";
 let judgeAt = 0;
 let loadingMessage = "로딩 중";
+let faceDetectionStarted = false;
 
 function preload() {
   songCatalog = loadJSON(GAME_CONFIG.songsPath);
@@ -59,11 +60,47 @@ function setupCamera() {
       facingMode: "user"
     },
     audio: false
-  }, () => faceMesh.detectStart(video, gotFaces));
+  }, startFaceDetectionWhenVideoReady);
   video.size(GAME_CONFIG.cameraWidth, GAME_CONFIG.cameraHeight);
+  video.elt.setAttribute("autoplay", "");
+  video.elt.setAttribute("muted", "");
   video.elt.setAttribute("playsinline", "");
+  video.elt.setAttribute("webkit-playsinline", "");
+  video.elt.autoplay = true;
   video.elt.muted = true;
-  video.hide();
+  video.elt.playsInline = true;
+  video.elt.addEventListener("loadedmetadata", startFaceDetectionWhenVideoReady);
+
+  // iOS Safari may pause autoplay video when p5's hide() sets display:none.
+  // Keep the capture element alive but visually out of the interface.
+  video.elt.style.position = "fixed";
+  video.elt.style.left = "0";
+  video.elt.style.top = "0";
+  video.elt.style.width = "1px";
+  video.elt.style.height = "1px";
+  video.elt.style.opacity = "0.001";
+  video.elt.style.pointerEvents = "none";
+  video.elt.style.zIndex = "0";
+}
+
+function startFaceDetectionWhenVideoReady() {
+  if (!video || faceDetectionStarted) return;
+
+  const startDetection = () => {
+    if (faceDetectionStarted || !video.elt.videoWidth) return;
+    faceDetectionStarted = true;
+    faceMesh.detectStart(video, gotFaces);
+  };
+
+  const playPromise = video.elt.play();
+  if (playPromise?.then) {
+    playPromise.then(startDetection).catch(() => {
+      loadingMessage = "화면을 터치해서 카메라를 시작해주세요";
+    });
+    return;
+  }
+
+  startDetection();
 }
 
 function gotFaces(results) {
@@ -358,6 +395,8 @@ function mousePressed() {
 }
 
 function handlePress(x, y) {
+  startFaceDetectionWhenVideoReady();
+
   if (state !== "playing") {
     for (let i = 0; i < songs.length; i += 1) {
       const tab = songs[i].tab;
