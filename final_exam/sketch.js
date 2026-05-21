@@ -2,6 +2,7 @@ let video;
 let faceMesh;
 let faces = [];
 let synth;
+let songCatalog;
 let songs = [];
 let chart;
 let selectedSong = 0;
@@ -22,7 +23,7 @@ let judgeAt = 0;
 let loadingMessage = "로딩 중";
 
 function preload() {
-  songs = loadJSON(GAME_CONFIG.songsPath);
+  songCatalog = loadJSON(GAME_CONFIG.songsPath);
   faceMesh = ml5.faceMesh({ maxFaces: 1, refineLandmarks: false, flipHorizontal: false });
 }
 
@@ -32,6 +33,7 @@ function setup() {
   textFont("Arial");
   synth = new p5.PolySynth();
   setupCamera();
+  songs = songCatalog.songs;
   selectSong(0);
 }
 
@@ -69,10 +71,9 @@ function gotFaces(results) {
 }
 
 function selectSong(index) {
-  songs = normalizeSongs(songs);
-  if (songs.length === 0) {
+  if (!Array.isArray(songs) || songs.length === 0) {
     state = "error";
-    loadingMessage = "곡 목록 로딩 실패";
+    loadingMessage = "곡 목록 로딩 실패\nsongs 배열이 없음";
     return;
   }
   if (chartRequested) return;
@@ -99,19 +100,6 @@ function selectSong(index) {
     console.error(error);
     chartRequested = false;
   });
-}
-
-function normalizeSongs(data) {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.songs)) return data.songs;
-  if (!data || typeof data !== "object") return [];
-
-  const keys = Object.keys(data);
-  if (keys.length === 0 || !keys.every((key) => /^\d+$/.test(key))) return [];
-  return keys
-    .sort((a, b) => Number(a) - Number(b))
-    .map((key) => data[key])
-    .filter((song) => song && typeof song.chart === "string");
 }
 
 function resetGame() {
