@@ -19,9 +19,9 @@ let hits = 0;
 let misses = 0;
 let judge = "";
 let judgeAt = 0;
+let loadingMessage = "로딩 중";
 
 function preload() {
-  songs = loadJSON(GAME_CONFIG.songsPath);
   faceMesh = ml5.faceMesh({ maxFaces: 1, refineLandmarks: false, flipHorizontal: false });
 }
 
@@ -31,7 +31,7 @@ function setup() {
   textFont("Arial");
   synth = new p5.PolySynth();
   setupCamera();
-  selectSong(0);
+  loadSongs();
 }
 
 function draw() {
@@ -67,17 +67,40 @@ function gotFaces(results) {
   faces = results || [];
 }
 
-function selectSong(index) {
+async function loadSongs() {
+  try {
+    loadingMessage = "곡 목록 로딩 중";
+    const response = await fetch(GAME_CONFIG.songsPath);
+    if (!response.ok) throw new Error(`${response.status} ${GAME_CONFIG.songsPath}`);
+    songs = await response.json();
+    if (!Array.isArray(songs) || songs.length === 0) throw new Error("songs.json is empty");
+    await selectSong(0);
+  } catch (error) {
+    state = "error";
+    loadingMessage = `곡 목록 로딩 실패\n${error.message}`;
+  }
+}
+
+async function selectSong(index) {
   if (!Array.isArray(songs) || songs.length === 0 || chartRequested) return;
   selectedSong = (index + songs.length) % songs.length;
   state = "loading";
   chartRequested = true;
-  loadJSON(songs[selectedSong].chart, (loaded) => {
-    chart = loaded;
+  loadingMessage = "채보 로딩 중";
+
+  try {
+    const response = await fetch(songs[selectedSong].chart);
+    if (!response.ok) throw new Error(`${response.status} ${songs[selectedSong].chart}`);
+    chart = await response.json();
+    if (!Array.isArray(chart.notes) || chart.notes.length === 0) throw new Error("chart notes are empty");
     resetGame();
-    chartRequested = false;
     state = "ready";
-  });
+  } catch (error) {
+    state = "error";
+    loadingMessage = `채보 로딩 실패\n${error.message}`;
+  } finally {
+    chartRequested = false;
+  }
 }
 
 function resetGame() {
@@ -290,7 +313,7 @@ function drawOverlay(stage) {
   } else if (state === "ready") {
     drawCenterText(stage, "얼굴을 카메라에 보여주세요");
   } else {
-    drawCenterText(stage, "로딩 중");
+    drawCenterText(stage, loadingMessage);
   }
 }
 
