@@ -69,7 +69,8 @@ function gotFaces(results) {
 }
 
 function selectSong(index) {
-  if (!Array.isArray(songs) || songs.length === 0) {
+  songs = normalizeSongs(songs);
+  if (songs.length === 0) {
     state = "error";
     loadingMessage = "곡 목록 로딩 실패";
     return;
@@ -98,6 +99,19 @@ function selectSong(index) {
     console.error(error);
     chartRequested = false;
   });
+}
+
+function normalizeSongs(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.songs)) return data.songs;
+  if (!data || typeof data !== "object") return [];
+
+  const keys = Object.keys(data);
+  if (keys.length === 0 || !keys.every((key) => /^\d+$/.test(key))) return [];
+  return keys
+    .sort((a, b) => Number(a) - Number(b))
+    .map((key) => data[key])
+    .filter((song) => song && typeof song.chart === "string");
 }
 
 function resetGame() {
