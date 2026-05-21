@@ -20,6 +20,13 @@
       "artist": "자크 오펜바흐",
       "source": "Orphee aux enfers: Galop infernal",
       "chart": "assets/charts/infernal-galop.json"
+    },
+    {
+      "id": "flea-waltz",
+      "title": "Flea Waltz",
+      "artist": "Traditional",
+      "source": "Der Flohwalzer",
+      "chart": "assets/charts/flea-waltz.json"
     }
   ]
 }
