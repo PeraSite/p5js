@@ -31,15 +31,12 @@ function setup() {
   textFont("Arial");
   synth = new p5.PolySynth();
   setupCamera();
+  selectSong(0);
 }
 
 function draw() {
   drawCamera();
   updateNose();
-
-  if (state === "loading" && !chartRequested && Array.isArray(songs) && video?.elt?.readyState >= 2) {
-    selectSong(0);
-  }
 
   if (state === "playing") {
     gameTime = millis() - startedAt;
@@ -71,6 +68,7 @@ function gotFaces(results) {
 }
 
 function selectSong(index) {
+  if (!Array.isArray(songs) || songs.length === 0 || chartRequested) return;
   selectedSong = (index + songs.length) % songs.length;
   state = "loading";
   chartRequested = true;
