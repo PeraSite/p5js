@@ -190,8 +190,9 @@ function notePosition(note) {
   const delta = gameTime - note.time;
   const before = (gameTime - (note.time - GAME_CONFIG.approachTime)) / GAME_CONFIG.approachTime;
   const after = delta / 800;
+  const x = lerp(0.2, 0.8, constrain(note.x, 0, 1));
   return {
-    x: stage.x + stage.w * note.x,
+    x: stage.x + stage.w * x,
     y: delta <= 0 ? lerp(startY, hitY, before) : lerp(hitY, endY, after),
     visible: before >= 0 && after <= 1
   };
