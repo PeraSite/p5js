@@ -1,7 +1,8 @@
 let video;
 let faceMesh;
 let faces = [];
-let synth;
+let piano;
+let pianoReady = false;
 let songCatalog;
 let songs = [];
 let chart;
@@ -21,21 +22,68 @@ let misses = 0;
 let judge = "";
 let judgeAt = 0;
 let loadingMessage = "로딩 중";
-let faceDetectionStarted = false;
 
 function preload() {
   songCatalog = loadJSON(GAME_CONFIG.songsPath);
-  faceMesh = ml5.faceMesh({ maxFaces: 1, refineLandmarks: false, flipHorizontal: false });
+  faceMesh = ml5.faceMesh({
+    maxFaces: 1,
+    refineLandmarks: false,
+    flipHorizontal: false,
+  });
 }
 
 function setup() {
   pixelDensity(1);
   createCanvas(windowWidth, windowHeight);
   textFont("Arial");
-  synth = new p5.PolySynth();
+  setupPiano();
   setupCamera();
   songs = songCatalog.songs;
   selectSong(0);
+}
+
+function setupPiano() {
+  Tone.getContext().lookAhead = 0;
+  piano = new Tone.Sampler({
+    urls: {
+      A0: "A0.mp3",
+      C1: "C1.mp3",
+      "D#1": "Ds1.mp3",
+      "F#1": "Fs1.mp3",
+      A1: "A1.mp3",
+      C2: "C2.mp3",
+      "D#2": "Ds2.mp3",
+      "F#2": "Fs2.mp3",
+      A2: "A2.mp3",
+      C3: "C3.mp3",
+      "D#3": "Ds3.mp3",
+      "F#3": "Fs3.mp3",
+      A3: "A3.mp3",
+      C4: "C4.mp3",
+      "D#4": "Ds4.mp3",
+      "F#4": "Fs4.mp3",
+      A4: "A4.mp3",
+      C5: "C5.mp3",
+      "D#5": "Ds5.mp3",
+      "F#5": "Fs5.mp3",
+      A5: "A5.mp3",
+      C6: "C6.mp3",
+      "D#6": "Ds6.mp3",
+      "F#6": "Fs6.mp3",
+      A6: "A6.mp3",
+      C7: "C7.mp3",
+      "D#7": "Ds7.mp3",
+      "F#7": "Fs7.mp3",
+      A7: "A7.mp3",
+      C8: "C8.mp3",
+    },
+    baseUrl: "assets/piano_sample/",
+    release: 0.9,
+    onload: () => {
+      pianoReady = true;
+    },
+  }).toDestination();
+  piano.volume.value = -5;
 }
 
 function draw() {
@@ -52,55 +100,21 @@ function draw() {
 }
 
 function setupCamera() {
-  video = createCapture({
-    video: {
-      width: { ideal: GAME_CONFIG.cameraWidth },
-      height: { ideal: GAME_CONFIG.cameraHeight },
-      aspectRatio: { ideal: GAME_CONFIG.stageRatio },
-      facingMode: "user"
+  video = createCapture(
+    {
+      video: {
+        width: { ideal: GAME_CONFIG.cameraWidth },
+        height: { ideal: GAME_CONFIG.cameraHeight },
+        aspectRatio: { ideal: GAME_CONFIG.stageRatio },
+        facingMode: "user",
+      },
+      audio: false,
     },
-    audio: false
-  }, startFaceDetectionWhenVideoReady);
+    () => faceMesh.detectStart(video, gotFaces),
+  );
   video.size(GAME_CONFIG.cameraWidth, GAME_CONFIG.cameraHeight);
-  video.elt.setAttribute("autoplay", "");
-  video.elt.setAttribute("muted", "");
-  video.elt.setAttribute("playsinline", "");
-  video.elt.setAttribute("webkit-playsinline", "");
-  video.elt.autoplay = true;
   video.elt.muted = true;
-  video.elt.playsInline = true;
-  video.elt.addEventListener("loadedmetadata", startFaceDetectionWhenVideoReady);
-
-  // iOS Safari may pause autoplay video when p5's hide() sets display:none.
-  // Keep the capture element alive but visually out of the interface.
-  video.elt.style.position = "fixed";
-  video.elt.style.left = "0";
-  video.elt.style.top = "0";
-  video.elt.style.width = "1px";
-  video.elt.style.height = "1px";
-  video.elt.style.opacity = "0.001";
-  video.elt.style.pointerEvents = "none";
-  video.elt.style.zIndex = "0";
-}
-
-function startFaceDetectionWhenVideoReady() {
-  if (!video || faceDetectionStarted) return;
-
-  const startDetection = () => {
-    if (faceDetectionStarted || !video.elt.videoWidth) return;
-    faceDetectionStarted = true;
-    faceMesh.detectStart(video, gotFaces);
-  };
-
-  const playPromise = video.elt.play();
-  if (playPromise?.then) {
-    playPromise.then(startDetection).catch(() => {
-      loadingMessage = "화면을 터치해서 카메라를 시작해주세요";
-    });
-    return;
-  }
-
-  startDetection();
+  video.hide();
 }
 
 function gotFaces(results) {
@@ -120,27 +134,36 @@ function selectSong(index) {
   chartRequested = true;
   loadingMessage = "채보 로딩 중";
 
-  loadJSON(songs[selectedSong].chart, (loaded) => {
-    if (!Array.isArray(loaded.notes) || loaded.notes.length === 0) {
-      state = "error";
-      loadingMessage = "채보 로딩 실패\nnotes 배열이 비어있음";
+  loadJSON(
+    songs[selectedSong].chart,
+    (loaded) => {
+      if (!Array.isArray(loaded.notes) || loaded.notes.length === 0) {
+        state = "error";
+        loadingMessage = "채보 로딩 실패\nnotes 배열이 비어있음";
+        chartRequested = false;
+        return;
+      }
+      chart = loaded;
+      resetGame();
+      state = "ready";
       chartRequested = false;
-      return;
-    }
-    chart = loaded;
-    resetGame();
-    state = "ready";
-    chartRequested = false;
-  }, (error) => {
-    state = "error";
-    loadingMessage = `채보 로딩 실패\n${songs[selectedSong].chart}`;
-    console.error(error);
-    chartRequested = false;
-  });
+    },
+    (error) => {
+      state = "error";
+      loadingMessage = `채보 로딩 실패\n${songs[selectedSong].chart}`;
+      console.error(error);
+      chartRequested = false;
+    },
+  );
 }
 
 function resetGame() {
-  notes = (chart?.notes || []).map((note, index) => ({ ...note, id: index, hit: false, missed: false }));
+  notes = (chart?.notes || []).map((note, index) => ({
+    ...note,
+    id: index,
+    hit: false,
+    missed: false,
+  }));
   gameTime = 0;
   startedAt = 0;
   score = 0;
@@ -151,13 +174,17 @@ function resetGame() {
   judge = "";
 }
 
-function startGame() {
+async function startGame() {
   if (state !== "ready" && state !== "finished") return;
   if (!nose) {
     showJudge("FACE REQUIRED");
     return;
   }
-  userStartAudio();
+  if (!pianoReady) {
+    showJudge("LOADING SOUND");
+    return;
+  }
+  await Tone.start();
   resetGame();
   startedAt = millis();
   state = "playing";
@@ -169,7 +196,10 @@ function updateNotes() {
 
     const pos = notePosition(note);
     const delta = gameTime - note.time;
-    const touching = nose && dist(nose.x, nose.y, pos.x, pos.y) < GAME_CONFIG.noseRadius + GAME_CONFIG.noteSize * 0.35;
+    const touching =
+      nose &&
+      dist(nose.x, nose.y, pos.x, pos.y) <
+        GAME_CONFIG.noseRadius + GAME_CONFIG.noteSize * 0.35;
 
     if (touching && abs(delta) <= GAME_CONFIG.judgeWindows.at(-1).window) {
       hitNote(note, delta);
@@ -183,14 +213,16 @@ function updateNotes() {
 }
 
 function hitNote(note, delta) {
-  const result = GAME_CONFIG.judgeWindows.find((item) => abs(delta) <= item.window);
+  const result = GAME_CONFIG.judgeWindows.find(
+    (item) => abs(delta) <= item.window,
+  );
   note.hit = true;
   hits += 1;
   combo += 1;
   maxCombo = max(maxCombo, combo);
   score += result.score + combo * 12;
   showJudge(result.label);
-  synth.play(note.note, 0.85, 0, note.duration || 0.28);
+  piano.triggerAttackRelease(note.note, note.duration || 0.28, Tone.immediate(), 0.9);
 }
 
 function missNote(note) {
@@ -225,13 +257,15 @@ function notePosition(note) {
   const startY = stage.y - GAME_CONFIG.noteSize;
   const endY = stage.y + stage.h + GAME_CONFIG.noteSize;
   const delta = gameTime - note.time;
-  const before = (gameTime - (note.time - GAME_CONFIG.approachTime)) / GAME_CONFIG.approachTime;
+  const before =
+    (gameTime - (note.time - GAME_CONFIG.approachTime)) /
+    GAME_CONFIG.approachTime;
   const after = delta / 800;
   const x = lerp(0.2, 0.8, constrain(note.x, 0, 1));
   return {
     x: stage.x + stage.w * x,
     y: delta <= 0 ? lerp(startY, hitY, before) : lerp(hitY, endY, after),
-    visible: before >= 0 && after <= 1
+    visible: before >= 0 && after <= 1,
   };
 }
 
@@ -245,7 +279,17 @@ function drawCamera() {
   drawingContext.save();
   drawingContext.translate(stage.x + stage.w, stage.y);
   drawingContext.scale(-1, 1);
-  drawingContext.drawImage(video.elt, crop.x, crop.y, crop.w, crop.h, 0, 0, stage.w, stage.h);
+  drawingContext.drawImage(
+    video.elt,
+    crop.x,
+    crop.y,
+    crop.w,
+    crop.h,
+    0,
+    0,
+    stage.w,
+    stage.h,
+  );
   drawingContext.restore();
   pop();
 
@@ -318,7 +362,11 @@ function drawUi() {
   textStyle(NORMAL);
   textSize(12);
   fill(230);
-  text(`${score}  ${combo} combo  ${hits}/${hits + misses}`, stage.x + 18, stage.y + 45);
+  text(
+    `${score}  ${combo} combo  ${hits}/${hits + misses}`,
+    stage.x + 18,
+    stage.y + 45,
+  );
 
   drawSongTabs(stage);
 
@@ -343,7 +391,12 @@ function drawSongTabs(stage) {
   for (let i = 0; i < songs.length; i += 1) {
     const label = songs[i].title;
     const w = textWidth(label) + 20;
-    fill(i === selectedSong ? 255 : 0, i === selectedSong ? 255 : 0, i === selectedSong ? 255 : 0, i === selectedSong ? 245 : 0);
+    fill(
+      i === selectedSong ? 255 : 0,
+      i === selectedSong ? 255 : 0,
+      i === selectedSong ? 255 : 0,
+      i === selectedSong ? 245 : 0,
+    );
     stroke(255, 255, 255, 170);
     strokeWeight(1);
     rect(x, y, w, 24, 4);
@@ -360,7 +413,10 @@ function drawOverlay(stage) {
   rect(stage.x, stage.y, stage.w, stage.h);
 
   if (state === "finished") {
-    drawCenterText(stage, `FINISH\n${score} / ${maxCombo} combo\n터치해서 다시 시작`);
+    drawCenterText(
+      stage,
+      `FINISH\n${score} / ${maxCombo} combo\n터치해서 다시 시작`,
+    );
   } else if (state === "ready" && nose) {
     drawCenterText(stage, "터치하면 시작");
   } else if (state === "ready") {
@@ -395,12 +451,16 @@ function mousePressed() {
 }
 
 function handlePress(x, y) {
-  startFaceDetectionWhenVideoReady();
-
   if (state !== "playing") {
     for (let i = 0; i < songs.length; i += 1) {
       const tab = songs[i].tab;
-      if (tab && x >= tab.x && x <= tab.x + tab.w && y >= tab.y && y <= tab.y + tab.h) {
+      if (
+        tab &&
+        x >= tab.x &&
+        x <= tab.x + tab.w &&
+        y >= tab.y &&
+        y <= tab.y + tab.h
+      ) {
         selectSong(i);
         return;
       }
@@ -411,8 +471,10 @@ function handlePress(x, y) {
 
 function keyPressed() {
   if (key === " ") startGame();
-  if (keyCode === RIGHT_ARROW && state !== "playing") selectSong(selectedSong + 1);
-  if (keyCode === LEFT_ARROW && state !== "playing") selectSong(selectedSong - 1);
+  if (keyCode === RIGHT_ARROW && state !== "playing")
+    selectSong(selectedSong + 1);
+  if (keyCode === LEFT_ARROW && state !== "playing")
+    selectSong(selectedSong - 1);
   return false;
 }
 
