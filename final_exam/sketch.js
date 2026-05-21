@@ -172,8 +172,9 @@ function updateNose() {
   }
 
   const stage = stageRect();
-  const x = stage.x + stage.w * (1 - point.x / GAME_CONFIG.cameraWidth);
-  const y = stage.y + stage.h * (point.y / GAME_CONFIG.cameraHeight);
+  const crop = cameraCrop();
+  const x = stage.x + stage.w * (1 - (point.x - crop.x) / crop.w);
+  const y = stage.y + stage.h * ((point.y - crop.y) / crop.h);
 
   if (!smoothNose) smoothNose = createVector(x, y);
   smoothNose.x = lerp(smoothNose.x, x, GAME_CONFIG.smoothing);
@@ -200,18 +201,33 @@ function drawCamera() {
   background(0);
   const stage = stageRect();
   if (!video || !video.elt.videoWidth) return;
+  const crop = cameraCrop();
 
   push();
   drawingContext.save();
   drawingContext.translate(stage.x + stage.w, stage.y);
   drawingContext.scale(-1, 1);
-  drawingContext.drawImage(video.elt, 0, 0, video.elt.videoWidth, video.elt.videoHeight, 0, 0, stage.w, stage.h);
+  drawingContext.drawImage(video.elt, crop.x, crop.y, crop.w, crop.h, 0, 0, stage.w, stage.h);
   drawingContext.restore();
   pop();
 
   noStroke();
   fill(0, 0, 0, 112);
   rect(stage.x, stage.y, stage.w, stage.h);
+}
+
+function cameraCrop() {
+  const videoWidth = video.elt.videoWidth;
+  const videoHeight = video.elt.videoHeight;
+  const videoRatio = videoWidth / videoHeight;
+
+  if (videoRatio > GAME_CONFIG.stageRatio) {
+    const w = videoHeight * GAME_CONFIG.stageRatio;
+    return { x: (videoWidth - w) / 2, y: 0, w, h: videoHeight };
+  }
+
+  const h = videoWidth / GAME_CONFIG.stageRatio;
+  return { x: 0, y: (videoHeight - h) / 2, w: videoWidth, h };
 }
 
 function drawGame() {
