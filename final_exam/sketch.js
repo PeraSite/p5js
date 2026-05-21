@@ -22,6 +22,7 @@ let judgeAt = 0;
 let loadingMessage = "로딩 중";
 
 function preload() {
+  songs = loadJSON(GAME_CONFIG.songsPath);
   faceMesh = ml5.faceMesh({ maxFaces: 1, refineLandmarks: false, flipHorizontal: false });
 }
 
@@ -31,7 +32,7 @@ function setup() {
   textFont("Arial");
   synth = new p5.PolySynth();
   setupCamera();
-  loadSongs();
+  selectSong(0);
 }
 
 function draw() {
@@ -67,40 +68,36 @@ function gotFaces(results) {
   faces = results || [];
 }
 
-async function loadSongs() {
-  try {
-    loadingMessage = "곡 목록 로딩 중";
-    const response = await fetch(GAME_CONFIG.songsPath);
-    if (!response.ok) throw new Error(`${response.status} ${GAME_CONFIG.songsPath}`);
-    songs = await response.json();
-    if (!Array.isArray(songs) || songs.length === 0) throw new Error("songs.json is empty");
-    await selectSong(0);
-  } catch (error) {
+function selectSong(index) {
+  if (!Array.isArray(songs) || songs.length === 0) {
     state = "error";
-    loadingMessage = `곡 목록 로딩 실패\n${error.message}`;
+    loadingMessage = "곡 목록 로딩 실패";
+    return;
   }
-}
+  if (chartRequested) return;
 
-async function selectSong(index) {
-  if (!Array.isArray(songs) || songs.length === 0 || chartRequested) return;
   selectedSong = (index + songs.length) % songs.length;
   state = "loading";
   chartRequested = true;
   loadingMessage = "채보 로딩 중";
 
-  try {
-    const response = await fetch(songs[selectedSong].chart);
-    if (!response.ok) throw new Error(`${response.status} ${songs[selectedSong].chart}`);
-    chart = await response.json();
-    if (!Array.isArray(chart.notes) || chart.notes.length === 0) throw new Error("chart notes are empty");
+  loadJSON(songs[selectedSong].chart, (loaded) => {
+    if (!Array.isArray(loaded.notes) || loaded.notes.length === 0) {
+      state = "error";
+      loadingMessage = "채보 로딩 실패\nnotes 배열이 비어있음";
+      chartRequested = false;
+      return;
+    }
+    chart = loaded;
     resetGame();
     state = "ready";
-  } catch (error) {
-    state = "error";
-    loadingMessage = `채보 로딩 실패\n${error.message}`;
-  } finally {
     chartRequested = false;
-  }
+  }, (error) => {
+    state = "error";
+    loadingMessage = `채보 로딩 실패\n${songs[selectedSong].chart}`;
+    console.error(error);
+    chartRequested = false;
+  });
 }
 
 function resetGame() {
