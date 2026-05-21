@@ -1,0 +1,23 @@
+[
+  {
+    "id": "small-star",
+    "title": "작은별",
+    "artist": "전래동요",
+    "source": "Ah! vous dirai-je, maman / Twinkle Twinkle Little Star",
+    "chart": "assets/charts/small-star.json"
+  },
+  {
+    "id": "butterfly",
+    "title": "나비야",
+    "artist": "독일 민요",
+    "source": "Hanschen klein",
+    "chart": "assets/charts/butterfly.json"
+  },
+  {
+    "id": "infernal-galop",
+    "title": "지옥의 갤럽",
+    "artist": "자크 오펜바흐",
+    "source": "Orphee aux enfers: Galop infernal",
+    "chart": "assets/charts/infernal-galop.json"
+  }
+]

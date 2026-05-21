@@ -1,995 +1,359 @@
 let video;
 let faceMesh;
 let faces = [];
-let easyChart;
-let piano;
-let reverb;
-let delayFx;
-
+let synth;
+let songs = [];
+let chart;
+let selectedSong = 0;
 let notes = [];
-let hitBursts = [];
-let gameState = "loading";
-let countdownStartedAt = 0;
-let gameStartedAt = 0;
-let lastGameTime = 0;
+let state = "loading";
+let chartRequested = false;
+let startedAt = 0;
+let gameTime = 0;
+let nose = null;
+let smoothNose = null;
 let score = 0;
 let combo = 0;
 let maxCombo = 0;
 let hits = 0;
 let misses = 0;
-let lastJudge = null;
-let lastJudgeAt = 0;
-let smoothedPlayer = null;
-let restingPlayer = null;
-let audioReady = false;
-let faceDetectStarted = false;
-let faceDebugEnabled = true;
-let faceMeshLoadStatus = "not checked";
-let faceDebug = {
-  cameraCallbackAt: 0,
-  detectStartAt: 0,
-  detectError: "",
-  lastFaceAt: 0,
-  lastFaceCount: 0,
-  lastKeypointCount: 0,
-  lastNoseConfidence: 0,
-  lastTrackedPoint: null,
-};
-let faceTransformIndex = 0;
-
-const CHART_PATH = "assets/mania/pretender-easy.json";
-const CAMERA_W = 360;
-const CAMERA_H = 640;
-const STAGE_RATIO = 9 / 16;
-const APPROACH_TIME = 1850;
-const NOTE_EXIT_AFTER_BEAT = 1150;
-const HIT_WINDOW = 150;
-const PLAYER_RADIUS_RATIO = 0.068;
-const NOTE_RADIUS_RATIO = 0.045;
-const TOP_UI_H = 86;
-const PLAY_TOP_RATIO = 0.14;
-const IDEAL_NOTE_Y_RATIO = 0.5;
-const MAX_NOTES = 220;
-const SMOOTHING = 0.42;
-const NOSE_CONFIDENCE = 0.18;
-const MISS_SOUND_MIN_GAP = 90;
-const FACE_TRANSFORM_MODES = [
-  "mirror",
-  "direct",
-  "rotate-cw",
-  "rotate-ccw",
-  "rotate-180",
-  "mirror-rotate-cw",
-  "mirror-rotate-ccw",
-];
-const NOTE_COLORS = [
-  [255, 105, 180],
-  [255, 202, 87],
-  [80, 214, 255],
-  [147, 232, 99],
-  [188, 136, 255],
-  [255, 139, 102],
-  [124, 243, 202],
-  [255, 255, 255],
-];
-const MELODY = [
-  "D4",
-  "F#4",
-  "A4",
-  "B4",
-  "A4",
-  "F#4",
-  "E4",
-  "D4",
-  "A3",
-  "D4",
-  "E4",
-  "F#4",
-  "A4",
-  "B4",
-  "C#5",
-  "A4",
-];
+let judge = "";
+let judgeAt = 0;
 
 function preload() {
-  easyChart = loadJSON(CHART_PATH);
-  if (shouldLoadFaceMesh()) {
-    faceMesh = ml5.faceMesh({ maxFaces: 1, refineLandmarks: false, flipHorizontal: false });
-    faceMeshLoadStatus = "created";
-  }
+  songs = loadJSON(GAME_CONFIG.songsPath);
+  faceMesh = ml5.faceMesh({ maxFaces: 1, refineLandmarks: false, flipHorizontal: false });
 }
 
 function setup() {
   pixelDensity(1);
   createCanvas(windowWidth, windowHeight);
   textFont("Arial");
-  const stage = stageRect();
-  restingPlayer = createVector(stage.x + stage.w / 2, stage.y + stage.h * 0.62);
+  synth = new p5.PolySynth();
   setupCamera();
-  setupSynth();
-  buildNotes();
-  gameState = "ready";
 }
 
 function draw() {
-  tryStartFaceMesh();
-  drawScene();
-  const player = readPlayer();
+  drawCamera();
+  updateNose();
 
-  if (gameState === "countdown") {
-    const elapsed = millis() - countdownStartedAt;
-    if (elapsed >= 2400) startPlaying();
+  if (state === "loading" && !chartRequested && Array.isArray(songs) && video?.elt?.readyState >= 2) {
+    selectSong(0);
   }
 
-  const gameTime = currentGameTime();
-  if (gameState === "playing") {
-    updateNotes(gameTime, player);
+  if (state === "playing") {
+    gameTime = millis() - startedAt;
+    updateNotes();
   }
 
-  drawTrack(gameTime);
-  drawHitBursts();
-  drawPlayer(player);
-  drawHud();
-
-  if (gameState === "ready") drawStartScreen(player);
-  if (gameState === "countdown") drawCountdown();
-  if (gameState === "finished") drawFinishScreen();
-  if (faceDebugEnabled) drawFaceDebug(player);
+  drawGame();
+  drawUi();
 }
 
 function setupCamera() {
   video = createCapture({
     video: {
-      width: { ideal: CAMERA_W },
-      height: { ideal: CAMERA_H },
-      aspectRatio: { ideal: STAGE_RATIO },
-      resizeMode: "crop-and-scale",
-      frameRate: { ideal: 30, max: 30 },
-      facingMode: "user",
+      width: { ideal: GAME_CONFIG.cameraWidth },
+      height: { ideal: GAME_CONFIG.cameraHeight },
+      aspectRatio: { ideal: GAME_CONFIG.stageRatio },
+      facingMode: "user"
     },
-    audio: false,
-  }, () => {
-    faceDebug.cameraCallbackAt = millis();
-    tryStartFaceMesh();
-  });
-  video.size(CAMERA_W, CAMERA_H);
+    audio: false
+  }, () => faceMesh.detectStart(video, gotFaces));
+  video.size(GAME_CONFIG.cameraWidth, GAME_CONFIG.cameraHeight);
   video.elt.setAttribute("playsinline", "");
-  video.elt.setAttribute("muted", "");
   video.elt.muted = true;
-  video.elt.addEventListener("loadedmetadata", tryStartFaceMesh);
-  video.elt.addEventListener("loadeddata", tryStartFaceMesh);
-  video.elt.addEventListener("canplay", tryStartFaceMesh);
-  video.elt.addEventListener("playing", tryStartFaceMesh);
   video.hide();
-}
-
-function tryStartFaceMesh() {
-  if (faceDetectStarted) return;
-  if (!faceMesh) {
-    faceDebug.detectError = "faceMesh model not loaded";
-    return;
-  }
-  if (!video || !video.elt) return;
-
-  const source = videoSourceSize();
-  const ready = video.elt.readyState >= 2 && source.w > 0 && source.h > 0;
-  if (!ready) return;
-
-  try {
-    faceMesh.detectStart(video, gotFaces);
-    faceDetectStarted = true;
-    faceDebug.detectStartAt = millis();
-    faceDebug.detectError = "";
-  } catch (error) {
-    faceDebug.detectError = error?.message || String(error);
-    console.error("faceMesh detectStart failed", error);
-  }
-}
-
-function setupSynth() {
-  piano = new p5.PolySynth();
-  reverb = new p5.Reverb();
-  delayFx = new p5.Delay();
-  reverb.process(piano, 2.3, 1.8);
-  delayFx.process(piano, 0.18, 0.18, 1300);
-}
-
-function shouldLoadFaceMesh() {
-  if (navigator.webdriver) {
-    faceMeshLoadStatus = "skipped: webdriver";
-    return false;
-  }
-  const canvas = document.createElement("canvas");
-  const ok = Boolean(canvas.getContext("webgl2") || canvas.getContext("webgl"));
-  faceMeshLoadStatus = ok ? "webgl ok" : "skipped: no webgl";
-  return ok;
 }
 
 function gotFaces(results) {
   faces = results || [];
-  faceDebug.lastFaceAt = millis();
-  faceDebug.lastFaceCount = faces.length;
-  faceDebug.lastKeypointCount = faces[0]?.keypoints?.length || 0;
-  const nose = faces[0] ? noseKeypoint(faces[0]) : null;
-  faceDebug.lastNoseConfidence = confidenceOf(nose);
 }
 
-function buildNotes() {
-  const source = Array.isArray(easyChart?.notes) ? easyChart.notes : [];
-  const filtered = source
-    .filter((note) => Number.isFinite(note.time))
-    .filter((note, index) => index % 2 === 0)
-    .slice(0, MAX_NOTES);
-
-  if (filtered.length === 0) {
-    notes = Array.from({ length: 80 }, (_, index) => noteFromData({ time: 1000 + index * 520, lane: index % 8 }, index));
-    return;
-  }
-
-  const firstTime = filtered[0].time;
-  notes = filtered.map((note, index) => noteFromData({ ...note, time: note.time - firstTime + 1000 }, index));
-}
-
-function noteFromData(note, index) {
-  const lane = constrain(Number.isFinite(note.lane) ? note.lane : index % 8, 0, 7);
-  const phrase = floor(index / 8);
-  const pitchIndex = (lane + index + phrase * 3) % MELODY.length;
-  return {
-    id: `${note.id || "note"}-${index}`,
-    time: note.time,
-    lane,
-    pitch: MELODY[pitchIndex],
-    xProgress: (lane + 0.5) / 8,
-    judged: false,
-    hit: false,
-    color: NOTE_COLORS[lane % NOTE_COLORS.length],
-  };
-}
-
-function beginGame() {
-  userStartAudio();
-  audioReady = true;
-  resetGame();
-  countdownStartedAt = millis();
-  gameState = "countdown";
-}
-
-function startPlaying() {
-  gameStartedAt = millis();
-  lastGameTime = 0;
-  gameState = "playing";
+function selectSong(index) {
+  selectedSong = (index + songs.length) % songs.length;
+  state = "loading";
+  chartRequested = true;
+  loadJSON(songs[selectedSong].chart, (loaded) => {
+    chart = loaded;
+    resetGame();
+    chartRequested = false;
+    state = "ready";
+  });
 }
 
 function resetGame() {
-  buildNotes();
-  hitBursts = [];
+  notes = (chart?.notes || []).map((note, index) => ({ ...note, id: index, hit: false, missed: false }));
+  gameTime = 0;
+  startedAt = 0;
   score = 0;
   combo = 0;
   maxCombo = 0;
   hits = 0;
   misses = 0;
-  lastJudge = null;
-  lastJudgeAt = 0;
+  judge = "";
 }
 
-function currentGameTime() {
-  if (gameState !== "playing") return lastGameTime;
-  lastGameTime = millis() - gameStartedAt;
-  return lastGameTime;
+function startGame() {
+  if (state !== "ready" && state !== "finished") return;
+  if (!nose) {
+    showJudge("FACE REQUIRED");
+    return;
+  }
+  userStartAudio();
+  resetGame();
+  startedAt = millis();
+  state = "playing";
 }
 
-function updateNotes(gameTime, player) {
-  const playerRadius = playerRadiusPx();
-  const noteRadius = noteRadiusPx();
-
+function updateNotes() {
   for (const note of notes) {
-    if (note.judged) continue;
-    const pos = notePosition(note, gameTime);
-    const signedTimingDelta = gameTime - note.time;
-    const timingDelta = abs(signedTimingDelta);
-    const distanceNow = dist(player.x, player.y, pos.x, pos.y);
+    if (note.hit || note.missed) continue;
 
-    if (pos.visible && distanceNow <= playerRadius + noteRadius) {
-      hitNote(note, pos, signedTimingDelta);
-    } else if (gameTime > note.time + NOTE_EXIT_AFTER_BEAT) {
-      missNote(note, pos);
+    const pos = notePosition(note);
+    const delta = gameTime - note.time;
+    const touching = nose && dist(nose.x, nose.y, pos.x, pos.y) < GAME_CONFIG.noseRadius + GAME_CONFIG.noteSize * 0.35;
+
+    if (touching && abs(delta) <= GAME_CONFIG.judgeWindows.at(-1).window) {
+      hitNote(note, delta);
+    } else if (delta > GAME_CONFIG.missAfter) {
+      missNote(note);
     }
   }
 
   const last = notes[notes.length - 1];
-  if (last && gameTime > last.time + 2200) {
-    gameState = "finished";
-  }
+  if (last && gameTime > last.time + 1800) state = "finished";
 }
 
-function hitNote(note, pos, signedTimingDelta) {
-  note.judged = true;
+function hitNote(note, delta) {
+  const result = GAME_CONFIG.judgeWindows.find((item) => abs(delta) <= item.window);
   note.hit = true;
-  const timingDelta = abs(signedTimingDelta);
-
-  if (timingDelta <= HIT_WINDOW) {
-    hits += 1;
-    combo += 1;
-    maxCombo = max(maxCombo, combo);
-    const timingScore = timingDelta < 55 ? 320 : timingDelta < 105 ? 220 : 120;
-    score += timingScore + combo * 10;
-    showJudge(timingDelta < 55 ? "PERFECT" : "HIT", color(255, 255, 255));
-  } else {
-    misses += 1;
-    combo = 0;
-    score += 25;
-    showJudge(signedTimingDelta < 0 ? "EARLY" : "LATE", color(255, 202, 87));
-  }
-
-  playPiano(note.pitch, 0.72, 0.42);
-  addBurst(pos.x, pos.y, note.color, true, note.pitch);
+  hits += 1;
+  combo += 1;
+  maxCombo = max(maxCombo, combo);
+  score += result.score + combo * 12;
+  showJudge(result.label);
+  synth.play(note.note, 0.85, 0, note.duration || 0.28);
 }
 
-function missNote(note, pos) {
-  note.judged = true;
+function missNote(note) {
+  note.missed = true;
   misses += 1;
   combo = 0;
-  showJudge("MISS", color(255, 95, 120));
-  playMissSound();
-  addBurst(pos.x, pos.y, note.color, false, "x");
+  showJudge("MISS");
 }
 
-function playPiano(pitch, velocity, duration) {
-  if (!audioReady || !piano) return;
-  piano.play(pitch, velocity, 0, duration);
-}
-
-function playMissSound() {
-  if (!audioReady || !piano) return;
-  const now = millis();
-  if (now - (playMissSound.lastAt || 0) < MISS_SOUND_MIN_GAP) return;
-  playMissSound.lastAt = now;
-  piano.play("C3", 0.18, 0, 0.08);
-  piano.play("C#3", 0.12, 0.015, 0.07);
-}
-
-function readPlayer() {
-  const facePoint = trackedNosePoint();
-
-  if (!facePoint) {
-    const resting = smoothedPlayer || restingPlayer;
-    const safeResting = keepInPlayArea(resting);
-    if (!smoothedPlayer) smoothedPlayer = createVector(safeResting.x, safeResting.y);
-    return { x: safeResting.x, y: safeResting.y, tracked: false };
+function updateNose() {
+  const point = faces[0]?.keypoints?.[1] || faces[0]?.keypoints?.[4] || null;
+  if (!point) {
+    nose = null;
+    smoothNose = null;
+    return;
   }
 
-  const target = keepInPlayArea(facePoint);
-
-  if (!smoothedPlayer) {
-    smoothedPlayer = createVector(target.x, target.y);
-  } else {
-    smoothedPlayer.x = lerp(smoothedPlayer.x, target.x, SMOOTHING);
-    smoothedPlayer.y = lerp(smoothedPlayer.y, target.y, SMOOTHING);
-  }
-
-  const safe = keepInPlayArea(smoothedPlayer);
-  smoothedPlayer.set(safe.x, safe.y);
-  return { x: smoothedPlayer.x, y: smoothedPlayer.y, tracked: true };
-}
-
-function trackedNosePoint() {
-  const face = faces[0];
-  if (!face || !face.keypoints) {
-    faceDebug.lastTrackedPoint = null;
-    return null;
-  }
-
-  const nose = noseKeypoint(face);
-  if (nose) {
-    const point = mirrorVideoPoint(nose);
-    faceDebug.lastTrackedPoint = point;
-    return point;
-  }
-
-  const candidates = [4, 5, 6, 195, 197]
-    .map((index) => face.keypoints[index])
-    .filter(Boolean)
-    .map(mirrorVideoPoint);
-
-  if (candidates.length === 0) {
-    faceDebug.lastTrackedPoint = null;
-    return null;
-  }
-  const average = candidates.reduce(
-    (sum, point) => ({ x: sum.x + point.x, y: sum.y + point.y }),
-    { x: 0, y: 0 }
-  );
-  const point = { x: average.x / candidates.length, y: average.y / candidates.length };
-  faceDebug.lastTrackedPoint = point;
-  return point;
-}
-
-function noseKeypoint(face) {
-  if (!face || !face.keypoints) return null;
-  const named = face.keypoints.find((point) => {
-    const name = point.name || point.part || point.label || "";
-    return ["nose", "noseTip", "nose_tip"].includes(name);
-  });
-  return named || face.keypoints[1] || face.keypoints[4] || face.keypoints[0] || null;
-}
-
-function isConfident(point, threshold) {
-  if (!point) return false;
-  const confidence = point.confidence ?? point.score;
-  return confidence === undefined || confidence >= threshold;
-}
-
-function confidenceOf(point) {
-  if (!point) return 0;
-  return point.confidence ?? point.score ?? 1;
-}
-
-function mirrorVideoPoint(point) {
   const stage = stageRect();
-  const space = poseCoordinateSpace(point);
-  const crop = cropRectForRatio(space.w, space.h, STAGE_RATIO);
-  const u = constrain((point.x - crop.x) / crop.w, -0.2, 1.2);
-  const v = constrain((point.y - crop.y) / crop.h, -0.2, 1.2);
-  const transformed = transformFaceUv(u, v);
+  const x = stage.x + stage.w * (1 - point.x / GAME_CONFIG.cameraWidth);
+  const y = stage.y + stage.h * (point.y / GAME_CONFIG.cameraHeight);
 
-  return {
-    x: stage.x + transformed.u * stage.w,
-    y: stage.y + transformed.v * stage.h,
-  };
+  if (!smoothNose) smoothNose = createVector(x, y);
+  smoothNose.x = lerp(smoothNose.x, x, GAME_CONFIG.smoothing);
+  smoothNose.y = lerp(smoothNose.y, y, GAME_CONFIG.smoothing);
+  nose = { x: smoothNose.x, y: smoothNose.y };
 }
 
-function transformFaceUv(u, v) {
-  switch (FACE_TRANSFORM_MODES[faceTransformIndex]) {
-    case "direct":
-      return { u, v };
-    case "rotate-cw":
-      return { u: 1 - v, v: u };
-    case "rotate-ccw":
-      return { u: v, v: 1 - u };
-    case "rotate-180":
-      return { u: 1 - u, v: 1 - v };
-    case "mirror-rotate-cw":
-      return { u: v, v: u };
-    case "mirror-rotate-ccw":
-      return { u: 1 - v, v: 1 - u };
-    case "mirror":
-    default:
-      return { u: 1 - u, v };
-  }
-}
-
-function cycleFaceTransform() {
-  faceTransformIndex = (faceTransformIndex + 1) % FACE_TRANSFORM_MODES.length;
-  smoothedPlayer = null;
-}
-
-function keepInPlayArea(point) {
-  const r = playerRadiusPx();
+function notePosition(note) {
   const stage = stageRect();
-  return {
-    x: constrain(point.x, stage.x + r + 14, stage.x + stage.w - r - 14),
-    y: constrain(point.y, stage.y + TOP_UI_H + r, stage.y + stage.h - r - 14),
-  };
-}
-
-function notePosition(note, gameTime) {
-  const stage = stageRect();
+  const hitY = hitLineY();
+  const startY = stage.y - GAME_CONFIG.noteSize;
+  const endY = stage.y + stage.h + GAME_CONFIG.noteSize;
   const delta = gameTime - note.time;
-  const topY = playTopY() - noteRadiusPx() * 2.4;
-  const idealY = idealNoteY();
-  const exitY = stage.y + stage.h + noteRadiusPx() * 3;
-  const beforeBeatProgress = (gameTime - (note.time - APPROACH_TIME)) / APPROACH_TIME;
-  const afterBeatProgress = delta / NOTE_EXIT_AFTER_BEAT;
-  const y =
-    delta <= 0
-      ? lerp(topY, idealY, constrain(beforeBeatProgress, 0, 1))
-      : lerp(idealY, exitY, constrain(afterBeatProgress, 0, 1.2));
-
+  const before = (gameTime - (note.time - GAME_CONFIG.approachTime)) / GAME_CONFIG.approachTime;
+  const after = delta / 800;
   return {
-    x: lerp(stage.x + stage.w * 0.12, stage.x + stage.w * 0.88, note.xProgress),
-    y,
-    progress: delta <= 0 ? beforeBeatProgress : 1 + afterBeatProgress,
-    visible: beforeBeatProgress >= 0 && afterBeatProgress <= 1.15,
+    x: stage.x + stage.w * note.x,
+    y: delta <= 0 ? lerp(startY, hitY, before) : lerp(hitY, endY, after),
+    visible: before >= 0 && after <= 1
   };
 }
 
-function drawScene() {
-  background(7, 8, 13);
-  if (video && video.loadedmetadata) {
-    drawMirroredCamera();
-  }
-
-  noStroke();
-  fill(5, 5, 10, 118);
-  rect(0, 0, width, height);
-
+function drawCamera() {
+  background(0);
   const stage = stageRect();
-  const glowY = stage.y + stage.h * 0.24 + sin(frameCount * 0.018) * 18;
-  for (let i = 0; i < 7; i += 1) {
-    fill(255, 105, 180, 18 - i * 2);
-    ellipse(stage.x + stage.w * 0.52, glowY, stage.w * (0.42 + i * 0.14), stage.w * (0.22 + i * 0.08));
-  }
-}
-
-function drawTrack(gameTime) {
-  const stage = stageRect();
-  const top = playTopY();
-  const bottom = stage.y + stage.h;
-
-  stroke(255, 255, 255, 28);
-  strokeWeight(1);
-  for (let lane = 0; lane < 8; lane += 1) {
-    const x = lerp(stage.x + stage.w * 0.12, stage.x + stage.w * 0.88, (lane + 0.5) / 8);
-    line(x, top, x, bottom);
-  }
-
-  for (const note of notes) {
-    if (note.judged && note.hit) continue;
-    const pos = notePosition(note, gameTime);
-    if (!pos.visible && gameTime <= note.time + NOTE_EXIT_AFTER_BEAT) continue;
-    if (gameTime > note.time + NOTE_EXIT_AFTER_BEAT + 240) continue;
-    const alpha = note.judged ? 90 : map(pos.progress, 0, 0.2, 0, 255, true);
-    drawNote(note, pos.x, pos.y, alpha);
-  }
-}
-
-function drawNote(note, x, y, alpha) {
-  const r = noteRadiusPx();
-  push();
-  translate(x, y);
-  rotate(sin(frameCount * 0.045 + note.lane) * 0.16);
-  drawingContext.shadowBlur = 18;
-  drawingContext.shadowColor = `rgba(${note.color[0]},${note.color[1]},${note.color[2]},0.55)`;
-  noStroke();
-  fill(note.color[0], note.color[1], note.color[2], alpha);
-  ellipse(0, 0, r * 2.25, r * 1.72);
-  fill(255, 255, 255, alpha * 0.82);
-  ellipse(-r * 0.32, -r * 0.28, r * 0.62, r * 0.36);
-  stroke(255, 255, 255, alpha);
-  strokeWeight(max(2, r * 0.1));
-  noFill();
-  arc(0, 0, r * 2.48, r * 1.95, PI * 0.12, PI * 0.88);
-  drawingContext.shadowBlur = 0;
-  pop();
-}
-
-function drawPlayer(player) {
-  const r = playerRadiusPx();
-  push();
-  translate(player.x, player.y);
-  const bob = sin(frameCount * 0.12) * 3;
-  drawingContext.shadowBlur = 26;
-  drawingContext.shadowColor = player.tracked ? "rgba(255,105,180,0.52)" : "rgba(80,214,255,0.36)";
-
-  noStroke();
-  fill(0, 0, 0, 132);
-  ellipse(0, r * 0.96, r * 1.88, r * 0.42);
-
-  translate(0, bob);
-  fill(255, 190, 77);
-  ellipse(0, 0, r * 1.78, r * 1.42);
-  triangle(-r * 0.72, -r * 0.34, -r * 0.45, -r * 1.0, -r * 0.18, -r * 0.36);
-  triangle(r * 0.72, -r * 0.34, r * 0.45, -r * 1.0, r * 0.18, -r * 0.36);
-  fill(255, 219, 112);
-  triangle(-r * 0.54, -r * 0.42, -r * 0.42, -r * 0.78, -r * 0.26, -r * 0.42);
-  triangle(r * 0.54, -r * 0.42, r * 0.42, -r * 0.78, r * 0.26, -r * 0.42);
-
-  fill(84, 54, 38);
-  circle(-r * 0.28, -r * 0.08, r * 0.12);
-  circle(r * 0.28, -r * 0.08, r * 0.12);
-  ellipse(0, r * 0.12, r * 0.14, r * 0.1);
-  stroke(84, 54, 38);
-  strokeWeight(max(1.5, r * 0.035));
-  line(-r * 0.08, r * 0.17, -r * 0.2, r * 0.25);
-  line(r * 0.08, r * 0.17, r * 0.2, r * 0.25);
-
-  stroke(255, 238, 180, 230);
-  strokeWeight(max(1.5, r * 0.035));
-  line(-r * 0.5, r * 0.04, -r * 0.88, -r * 0.06);
-  line(-r * 0.5, r * 0.18, -r * 0.88, r * 0.18);
-  line(r * 0.5, r * 0.04, r * 0.88, -r * 0.06);
-  line(r * 0.5, r * 0.18, r * 0.88, r * 0.18);
-
-  noFill();
-  stroke(player.tracked ? color(255, 105, 180, 185) : color(80, 214, 255, 155));
-  strokeWeight(3);
-  circle(0, 0, r * 2.15);
-  drawingContext.shadowBlur = 0;
-  pop();
-}
-
-function drawFaceDebug(player) {
-  const stage = stageRect();
-  drawFaceMeshOverlay();
-
-  noFill();
-  stroke(80, 214, 255, 210);
-  strokeWeight(2);
-  rect(stage.x + 1, stage.y + 1, stage.w - 2, stage.h - 2);
-
-  if (faceDebug.lastTrackedPoint) {
-    noFill();
-    stroke(255, 255, 255, 210);
-    strokeWeight(2);
-    circle(faceDebug.lastTrackedPoint.x, faceDebug.lastTrackedPoint.y, playerRadiusPx() * 2.8);
-  }
-
-  const source = videoSourceSize();
-  const crop = cropRectForRatio(source.w, source.h, STAGE_RATIO);
-  const faceAge = faceDebug.lastFaceAt ? `${floor(millis() - faceDebug.lastFaceAt)}ms` : "never";
-  const lines = [
-    `debug face ${faceDebugEnabled ? "ON" : "OFF"}`,
-    `secure:${window.isSecureContext ? "yes" : "no"}  model:${faceMeshLoadStatus}`,
-    `video ready:${video?.elt?.readyState ?? "-"}  ${source.w}x${source.h}`,
-    `crop:${floor(crop.x)},${floor(crop.y)} ${floor(crop.w)}x${floor(crop.h)}`,
-    `axis:${FACE_TRANSFORM_MODES[faceTransformIndex]}  tap/M to change`,
-    `detect:${faceDetectStarted ? "started" : "waiting"}  err:${faceDebug.detectError || "none"}`,
-    `faces:${faceDebug.lastFaceCount}  kp:${faceDebug.lastKeypointCount}  age:${faceAge}`,
-    `nose:${nf(faceDebug.lastNoseConfidence, 1, 2)}  tracked:${player.tracked ? "yes" : "no"}`,
-    `cat:${floor(player.x - stage.x)},${floor(player.y - stage.y)}`,
-  ];
-
-  const panelX = stage.x + 8;
-  const panelY = stage.y + stage.h - 154;
-  noStroke();
-  fill(0, 0, 0, 174);
-  rect(panelX, panelY, min(stage.w - 16, 336), 146, 8);
-
-  textAlign(LEFT, TOP);
-  textStyle(NORMAL);
-  textSize(11);
-  for (let i = 0; i < lines.length; i += 1) {
-    fill(i === 5 && faceDebug.detectError ? color(255, 95, 120) : color(255, 255, 255, 218));
-    text(lines[i], panelX + 10, panelY + 9 + i * 16);
-  }
-
-  if (faces.length === 0) {
-    textAlign(CENTER, CENTER);
-    textStyle(BOLD);
-    textSize(15);
-    fill(255, 202, 87, 230);
-    text("NO FACEMESH POINTS", stage.x + stage.w / 2, stage.y + stage.h - 184);
-  }
-}
-
-function drawFaceMeshOverlay() {
-  if (!faces.length) return;
-
-  for (const face of faces) {
-    if (!face?.keypoints) continue;
-
-    const nose = noseKeypoint(face);
-    for (let i = 0; i < face.keypoints.length; i += 1) {
-      const keypoint = face.keypoints[i];
-      const p = mirrorVideoPoint(keypoint);
-      const name = keypoint.name || keypoint.part || `${i}`;
-      const isNose = keypoint === nose;
-
-      noStroke();
-      fill(isNose ? color(255, 105, 180, 245) : color(130, 255, 130, 155));
-      circle(p.x, p.y, isNose ? 14 : 4);
-
-      if (isNose || i % 20 === 0) {
-        fill(255, 255, 255, 210);
-        textAlign(LEFT, CENTER);
-        textStyle(NORMAL);
-        textSize(9);
-        text(`${i}:${name}`, p.x + 7, p.y);
-      }
-    }
-  }
-}
-
-function addBurst(x, y, rgb, success, label) {
-  const count = success ? 18 : 8;
-  const particles = Array.from({ length: count }, (_, index) => ({
-    angle: map(index, 0, count, 0, TWO_PI) + random(-0.22, 0.22),
-    speed: random(success ? 2.8 : 1.3, success ? 7.8 : 3.8),
-    size: random(success ? 4 : 3, success ? 10 : 6),
-  }));
-  hitBursts.push({ x, y, rgb, success, label, particles, createdAt: millis() });
-}
-
-function drawHitBursts() {
-  const now = millis();
-  hitBursts = hitBursts.filter((burst) => now - burst.createdAt < 620);
-
-  for (const burst of hitBursts) {
-    const p = constrain((now - burst.createdAt) / 620, 0, 1);
-    const alpha = map(p, 0, 1, 240, 0);
-    for (const particle of burst.particles) {
-      const d = particle.speed * p * 20;
-      noStroke();
-      fill(burst.rgb[0], burst.rgb[1], burst.rgb[2], alpha);
-      circle(burst.x + cos(particle.angle) * d, burst.y + sin(particle.angle) * d, particle.size * (1 - p * 0.45));
-    }
-
-    if (burst.success) {
-      textAlign(CENTER, CENTER);
-      textStyle(BOLD);
-      textSize(14);
-      fill(255, alpha);
-      text(burst.label, burst.x, burst.y - 34 - p * 18);
-    }
-  }
-}
-
-function drawHud() {
-  const stage = stageRect();
-  const total = hits + misses;
-  const accuracy = total === 0 ? 100 : (hits / total) * 100;
-
-  noStroke();
-  fill(0, 0, 0, 142);
-  rect(stage.x, stage.y, stage.w, TOP_UI_H);
-
-  textAlign(LEFT, CENTER);
-  textStyle(BOLD);
-  fill(255);
-  textSize(18);
-  text("Nose Piano", stage.x + 18, stage.y + 24);
-  textStyle(NORMAL);
-  fill(255, 255, 255, 170);
-  textSize(12);
-  text("Move your nose into falling notes", stage.x + 18, stage.y + 49);
-
-  textAlign(RIGHT, CENTER);
-  textStyle(BOLD);
-  fill(255);
-  textSize(24);
-  text(nf(score, 6, 0), stage.x + stage.w - 18, stage.y + 24);
-  textStyle(NORMAL);
-  textSize(12);
-  fill(255, 255, 255, 175);
-  text(`${combo} combo  ${hits}/${total}  ${nf(accuracy, 2, 1)}%`, stage.x + stage.w - 18, stage.y + 50);
-
-  if (lastJudge && millis() - lastJudgeAt < 560) {
-    textAlign(CENTER, CENTER);
-    textStyle(BOLD);
-    textSize(28);
-    fill(lastJudge.color);
-    text(lastJudge.label, stage.x + stage.w / 2, stage.y + TOP_UI_H + 28);
-  }
-}
-
-function drawStartScreen(player) {
-  const stage = stageRect();
-  drawScrim(138);
-  drawPlayer(player);
-
-  textAlign(CENTER, CENTER);
-  noStroke();
-  fill(255);
-  textStyle(BOLD);
-  textSize(min(stage.w * 0.12, 50));
-  text("Nose Piano", stage.x + stage.w / 2, stage.y + stage.h * 0.24);
-
-  textStyle(NORMAL);
-  fill(255, 255, 255, 205);
-  textSize(15);
-  text(
-    "코 위치에 있는 캐릭터로 노트를 받아요.\n맞으면 피아노 음이 나고, 놓치면 음악이 무너집니다.",
-    stage.x + stage.w * 0.12,
-    stage.y + stage.h * 0.32,
-    stage.w * 0.76,
-    70
-  );
-
-  const btn = startButtonRect();
-  fill(255, 105, 180);
-  rect(btn.x, btn.y, btn.w, btn.h, 16);
-  fill(255);
-  textStyle(BOLD);
-  textSize(18);
-  text("START", btn.x + btn.w / 2, btn.y + btn.h / 2);
-
-  textStyle(NORMAL);
-  fill(255, 255, 255, 150);
-  textSize(12);
-  text("카메라 허용 후 세로 화면으로 플레이", stage.x + stage.w / 2, btn.y + btn.h + 32);
-}
-
-function drawCountdown() {
-  const stage = stageRect();
-  drawScrim(112);
-  const number = max(1, 3 - floor((millis() - countdownStartedAt) / 800));
-  textAlign(CENTER, CENTER);
-  textStyle(BOLD);
-  textSize(min(stage.w, stage.h) * 0.22);
-  fill(255);
-  text(number, stage.x + stage.w / 2, stage.y + stage.h / 2);
-}
-
-function drawFinishScreen() {
-  const stage = stageRect();
-  drawScrim(162);
-  const total = hits + misses;
-  const accuracy = total === 0 ? 100 : (hits / total) * 100;
-
-  textAlign(CENTER, CENTER);
-  noStroke();
-  fill(255);
-  textStyle(BOLD);
-  textSize(min(stage.w * 0.12, 52));
-  text("FINISH", stage.x + stage.w / 2, stage.y + stage.h * 0.28);
-
-  textStyle(NORMAL);
-  textSize(20);
-  fill(255, 255, 255, 220);
-  text(`Score ${nf(score, 1, 0)}`, stage.x + stage.w / 2, stage.y + stage.h * 0.39);
-  text(`Hit ${hits}/${total}   ${nf(accuracy, 2, 1)}%`, stage.x + stage.w / 2, stage.y + stage.h * 0.45);
-  text(`Max Combo ${maxCombo}`, stage.x + stage.w / 2, stage.y + stage.h * 0.51);
-
-  const btn = startButtonRect();
-  fill(255, 105, 180);
-  rect(btn.x, stage.y + stage.h * 0.62, btn.w, btn.h, 16);
-  fill(255);
-  textStyle(BOLD);
-  textSize(17);
-  text("REPLAY", btn.x + btn.w / 2, stage.y + stage.h * 0.62 + btn.h / 2);
-}
-
-function showJudge(label, judgeColor) {
-  lastJudge = { label, color: judgeColor };
-  lastJudgeAt = millis();
-}
-
-function keyPressed() {
-  if (key === "m" || key === "M") {
-    cycleFaceTransform();
-    return false;
-  }
-  if (key === "d" || key === "D") {
-    faceDebugEnabled = !faceDebugEnabled;
-    return false;
-  }
-  if (key === " " || keyCode === ENTER) {
-    if (gameState === "ready" || gameState === "finished") beginGame();
-    return false;
-  }
-  if (key === "r" || key === "R") {
-    beginGame();
-    return false;
-  }
-  return false;
-}
-
-function mousePressed() {
-  if (gameState === "ready" && pointInRect(mouseX, mouseY, startButtonRect())) {
-    beginGame();
-  } else if (gameState === "finished") {
-    beginGame();
-  }
-  return false;
-}
-
-function touchStarted() {
-  cycleFaceTransform();
-  if (gameState === "ready" || gameState === "finished") beginGame();
-  return false;
-}
-
-function touchMoved() {
-  return false;
-}
-
-function mouseDragged() {
-  return false;
-}
-
-function windowResized() {
-  resizeCanvas(windowWidth, windowHeight);
-  const stage = stageRect();
-  restingPlayer = createVector(stage.x + stage.w / 2, stage.y + stage.h * 0.62);
-  smoothedPlayer = null;
-  buildNotes();
-}
-
-function startButtonRect() {
-  const stage = stageRect();
-  const w = min(stage.w * 0.72, 320);
-  const h = 58;
-  return {
-    x: stage.x + (stage.w - w) / 2,
-    y: stage.y + stage.h * 0.58,
-    w,
-    h,
-  };
-}
-
-function pointInRect(x, y, rectInfo) {
-  return x >= rectInfo.x && x <= rectInfo.x + rectInfo.w && y >= rectInfo.y && y <= rectInfo.y + rectInfo.h;
-}
-
-function drawScrim(alpha) {
-  noStroke();
-  fill(0, 0, 0, alpha);
-  rect(0, 0, width, height);
-}
-
-function stageRect() {
-  const canvasRatio = width / height;
-  let w = width;
-  let h = height;
-
-  if (canvasRatio > STAGE_RATIO) {
-    h = height;
-    w = h * STAGE_RATIO;
-  } else {
-    w = width;
-    h = w / STAGE_RATIO;
-  }
-
-  return {
-    x: (width - w) / 2,
-    y: (height - h) / 2,
-    w,
-    h,
-  };
-}
-
-function drawMirroredCamera() {
-  const stage = stageRect();
-  const source = videoSourceSize();
-  const crop = cropRectForRatio(source.w, source.h, STAGE_RATIO);
+  if (!video || !video.elt.videoWidth) return;
 
   push();
   drawingContext.save();
   drawingContext.translate(stage.x + stage.w, stage.y);
   drawingContext.scale(-1, 1);
-  drawingContext.globalAlpha = 0.72;
-  drawingContext.drawImage(video.elt, crop.x, crop.y, crop.w, crop.h, 0, 0, stage.w, stage.h);
-  drawingContext.globalAlpha = 1;
+  drawingContext.drawImage(video.elt, 0, 0, video.elt.videoWidth, video.elt.videoHeight, 0, 0, stage.w, stage.h);
   drawingContext.restore();
   pop();
+
+  noStroke();
+  fill(0, 0, 0, 112);
+  rect(stage.x, stage.y, stage.w, stage.h);
 }
 
-function videoSourceSize() {
-  return {
-    w: video?.elt?.videoWidth || video?.width || CAMERA_W,
-    h: video?.elt?.videoHeight || video?.height || CAMERA_H,
-  };
-}
+function drawGame() {
+  const stage = stageRect();
+  const lineY = hitLineY();
 
-function poseCoordinateSpace(point) {
-  const natural = videoSourceSize();
-  const display = { w: video?.width || CAMERA_W, h: video?.height || CAMERA_H };
-  if (point.x > display.w + 1 || point.y > display.h + 1) return natural;
-  return display;
-}
+  stroke(180, 180, 180, 125);
+  strokeWeight(10);
+  line(stage.x, lineY, stage.x + stage.w, lineY);
+  stroke(255, 255, 255, 170);
+  strokeWeight(1);
+  line(stage.x, lineY, stage.x + stage.w, lineY);
 
-function cropRectForRatio(sourceW, sourceH, ratio) {
-  const sourceRatio = sourceW / sourceH;
-  let x = 0;
-  let y = 0;
-  let w = sourceW;
-  let h = sourceH;
-
-  if (sourceRatio > ratio) {
-    w = sourceH * ratio;
-    x = (sourceW - w) / 2;
-  } else {
-    h = sourceW / ratio;
-    y = (sourceH - h) / 2;
+  noStroke();
+  textAlign(CENTER, CENTER);
+  textStyle(BOLD);
+  textSize(GAME_CONFIG.noteSize);
+  for (const note of notes) {
+    if (note.hit || note.missed) continue;
+    const pos = notePosition(note);
+    if (!pos.visible) continue;
+    fill(255);
+    text("♪", pos.x, pos.y);
   }
 
-  return { x, y, w, h };
+  if (nose) {
+    noFill();
+    stroke(255);
+    strokeWeight(3);
+    circle(nose.x, nose.y, GAME_CONFIG.noseRadius * 2);
+    noStroke();
+    fill(255);
+    circle(nose.x, nose.y, 7);
+  }
 }
 
-function playTopY() {
+function drawUi() {
   const stage = stageRect();
-  return max(stage.y + TOP_UI_H + 28, stage.y + stage.h * PLAY_TOP_RATIO);
+  const song = songs[selectedSong] || {};
+
+  noStroke();
+  fill(0, 0, 0, 176);
+  rect(stage.x, stage.y, stage.w, 92);
+
+  fill(255);
+  textAlign(LEFT, TOP);
+  textStyle(BOLD);
+  textSize(18);
+  text(song.title || "로딩 중", stage.x + 18, stage.y + 16);
+  textStyle(NORMAL);
+  textSize(12);
+  fill(230);
+  text(`${score}  ${combo} combo  ${hits}/${hits + misses}`, stage.x + 18, stage.y + 45);
+
+  drawSongTabs(stage);
+
+  if (judge && millis() - judgeAt < 520) {
+    textAlign(CENTER, CENTER);
+    textStyle(BOLD);
+    textSize(28);
+    fill(255);
+    text(judge, stage.x + stage.w / 2, hitLineY() - 64);
+  }
+
+  if (state !== "playing") drawOverlay(stage);
+  if (state === "playing" && !nose) drawCenterText(stage, "FACE LOST");
 }
 
-function idealNoteY() {
+function drawSongTabs(stage) {
+  const y = stage.y + 64;
+  let x = stage.x + 18;
+  textAlign(LEFT, CENTER);
+  textSize(11);
+  textStyle(BOLD);
+  for (let i = 0; i < songs.length; i += 1) {
+    const label = songs[i].title;
+    const w = textWidth(label) + 20;
+    fill(i === selectedSong ? 255 : 0, i === selectedSong ? 255 : 0, i === selectedSong ? 255 : 0, i === selectedSong ? 245 : 0);
+    stroke(255, 255, 255, 170);
+    strokeWeight(1);
+    rect(x, y, w, 24, 4);
+    noStroke();
+    fill(i === selectedSong ? 0 : 255);
+    text(label, x + 10, y + 12);
+    songs[i].tab = { x, y, w, h: 24 };
+    x += w + 8;
+  }
+}
+
+function drawOverlay(stage) {
+  fill(0, 0, 0, 170);
+  rect(stage.x, stage.y, stage.w, stage.h);
+
+  if (state === "finished") {
+    drawCenterText(stage, `FINISH\n${score} / ${maxCombo} combo\n터치해서 다시 시작`);
+  } else if (state === "ready" && nose) {
+    drawCenterText(stage, "터치하면 시작");
+  } else if (state === "ready") {
+    drawCenterText(stage, "얼굴을 카메라에 보여주세요");
+  } else {
+    drawCenterText(stage, "로딩 중");
+  }
+}
+
+function drawCenterText(stage, message) {
+  noStroke();
+  fill(255);
+  textAlign(CENTER, CENTER);
+  textStyle(BOLD);
+  textSize(22);
+  text(message, stage.x + stage.w / 2, stage.y + stage.h / 2);
+}
+
+function showJudge(label) {
+  judge = label;
+  judgeAt = millis();
+}
+
+function touchStarted() {
+  handlePress(mouseX, mouseY);
+  return false;
+}
+
+function mousePressed() {
+  handlePress(mouseX, mouseY);
+  return false;
+}
+
+function handlePress(x, y) {
+  if (state !== "playing") {
+    for (let i = 0; i < songs.length; i += 1) {
+      const tab = songs[i].tab;
+      if (tab && x >= tab.x && x <= tab.x + tab.w && y >= tab.y && y <= tab.y + tab.h) {
+        selectSong(i);
+        return;
+      }
+    }
+  }
+  startGame();
+}
+
+function keyPressed() {
+  if (key === " ") startGame();
+  if (keyCode === RIGHT_ARROW && state !== "playing") selectSong(selectedSong + 1);
+  if (keyCode === LEFT_ARROW && state !== "playing") selectSong(selectedSong - 1);
+  return false;
+}
+
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+}
+
+function stageRect() {
+  const ratio = width / height;
+  let w = width;
+  let h = height;
+  if (ratio > GAME_CONFIG.stageRatio) w = h * GAME_CONFIG.stageRatio;
+  else h = w / GAME_CONFIG.stageRatio;
+  return { x: (width - w) / 2, y: (height - h) / 2, w, h };
+}
+
+function hitLineY() {
   const stage = stageRect();
-  return stage.y + stage.h * IDEAL_NOTE_Y_RATIO;
-}
-
-function playerRadiusPx() {
-  return constrain(stageRect().w * PLAYER_RADIUS_RATIO, 24, 42);
-}
-
-function noteRadiusPx() {
-  return constrain(stageRect().w * NOTE_RADIUS_RATIO, 17, 30);
+  return stage.y + stage.h * GAME_CONFIG.hitLineY;
 }
