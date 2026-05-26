@@ -8,8 +8,6 @@ const App = {
   uiButtons: [],
   songs: [],
   songCatalog: null,
-  chartRequested: false,
-  loadingMessage: "로딩 중",
 };
 
 /**

@@ -5,6 +5,8 @@
       "title": "작은별",
       "artist": "전래동요",
       "source": "Ah! vous dirai-je, maman / Twinkle Twinkle Little Star",
+      "difficulty": "EASY",
+      "length": 28,
       "chart": "assets/charts/small-star.json"
     },
     {
@@ -12,6 +14,8 @@
       "title": "나비야",
       "artist": "독일 민요",
       "source": "Hanschen klein",
+      "difficulty": "NORMAL",
+      "length": 17,
       "chart": "assets/charts/butterfly.json"
     },
     {
@@ -19,6 +23,8 @@
       "title": "지옥의 갤럽",
       "artist": "자크 오펜바흐",
       "source": "Orphee aux enfers: Galop infernal",
+      "difficulty": "HARD",
+      "length": 17,
       "chart": "assets/charts/infernal-galop.json"
     },
     {
@@ -26,6 +32,8 @@
       "title": "Flea Waltz",
       "artist": "Traditional",
       "source": "Der Flohwalzer",
+      "difficulty": "HARD",
+      "length": 14,
       "chart": "assets/charts/flea-waltz.json"
     }
   ]

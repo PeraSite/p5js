@@ -1,10 +1,3 @@
-const SONG_META = {
-  "small-star": { difficulty: "EASY", length: "28s" },
-  butterfly: { difficulty: "NORMAL", length: "17s" },
-  "infernal-galop": { difficulty: "HARD", length: "17s" },
-  "flea-waltz": { difficulty: "HARD", length: "14s" },
-};
-
 /**
  * 곡 목록과 선택·재생 버튼이 있는 곡 선택 화면을 그린다.
  * @author 한채아
@@ -24,7 +17,6 @@ function drawSongSelectScreen() {
   const top = stage.y + 104;
   for (let i = 0; i < App.songs.length; i += 1) {
     const song = App.songs[i];
-    const meta = SONG_META[song.id] || { difficulty: "NORMAL", length: "--s" };
     const x = stage.x + 28;
     const y = top + i * (cardH + gap);
     const selected = i === App.selectedSong;
@@ -41,7 +33,7 @@ function drawSongSelectScreen() {
     text(song.title, x + 18, y + 14);
     textStyle(NORMAL);
     textSize(12);
-    text(`${meta.difficulty}  /  ${meta.length}`, x + 18, y + 46);
+    text(`${song.difficulty || "NORMAL"}  /  ${song.length}s`, x + 18, y + 46);
 
     const index = i;
     registerButton(x, y, stage.w - 56, cardH, true, () => selectSong(index));

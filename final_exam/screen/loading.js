@@ -4,5 +4,5 @@
  */
 function drawLoadingScreen() {
   clearButtons();
-  drawCenterText(stageRect(), App.loadingMessage);
+  drawCenterText(stageRect(), "로딩 중");
 }

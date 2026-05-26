@@ -1,9 +1,14 @@
 /**
- * p5 preload: 곡 목록 JSON과 faceMesh 모델을 로드한다.
+ * p5 preload: 곡·채보 JSON과 faceMesh 모델을 로드한다.
  * @author 한채아
  */
 function preload() {
-  App.songCatalog = loadJSON(GAME_CONFIG.songsPath);
+  loadJSON(GAME_CONFIG.songsPath, (catalog) => {
+    App.songCatalog = catalog;
+    for (const song of catalog.songs) {
+      song.chartData = loadJSON(song.chart);
+    }
+  });
   Face.faceMesh = ml5.faceMesh({
     maxFaces: 1,
     refineLandmarks: false,
@@ -55,9 +60,6 @@ function draw() {
       break;
     case "songSelect":
       drawSongSelectScreen();
-      break;
-    case "loading":
-      drawLoadingScreen();
       break;
     case "howTo":
       drawHowToScreen();
