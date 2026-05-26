@@ -8,7 +8,7 @@ let songs = [];
 let chart;
 let selectedSong = 0;
 let notes = [];
-let state = "loading";
+let state = "main";
 let chartRequested = false;
 let startedAt = 0;
 let gameTime = 0;
@@ -22,6 +22,14 @@ let misses = 0;
 let judge = "";
 let judgeAt = 0;
 let loadingMessage = "로딩 중";
+let uiButtons = [];
+
+const SONG_META = {
+  "small-star": { difficulty: "EASY", length: "28s" },
+  butterfly: { difficulty: "NORMAL", length: "17s" },
+  "infernal-galop": { difficulty: "HARD", length: "17s" },
+  "flea-waltz": { difficulty: "HARD", length: "14s" },
+};
 
 function preload() {
   songCatalog = loadJSON(GAME_CONFIG.songsPath);
@@ -39,7 +47,8 @@ function setup() {
   setupPiano();
   setupCamera();
   songs = songCatalog.songs;
-  selectSong(0);
+  selectedSong = 0;
+  state = "main";
 }
 
 function setupPiano() {
@@ -87,7 +96,6 @@ function setupPiano() {
 }
 
 function draw() {
-  drawCamera();
   updateNose();
 
   if (state === "playing") {
@@ -95,8 +103,27 @@ function draw() {
     updateNotes();
   }
 
-  drawGame();
-  drawUi();
+  if (state === "playing") {
+    drawCamera();
+    drawGame();
+    drawPlayingUi();
+    if (!nose) drawCenterText(stageRect(), "FACE LOST");
+    return;
+  }
+
+  if (state === "cameraSetup") {
+    drawCamera();
+    drawCameraSetupScreen();
+    return;
+  }
+
+  background(0);
+  if (state === "main") drawMainScreen();
+  else if (state === "songSelect") drawSongSelectScreen();
+  else if (state === "loading") drawLoadingScreen();
+  else if (state === "howTo") drawHowToScreen();
+  else if (state === "result") drawResultScreen();
+  else drawLoadingScreen();
 }
 
 function setupCamera() {
@@ -127,9 +154,18 @@ function selectSong(index) {
     loadingMessage = "곡 목록 로딩 실패\nsongs 배열이 없음";
     return;
   }
-  if (chartRequested) return;
 
   selectedSong = (index + songs.length) % songs.length;
+}
+
+function loadSelectedSong(nextState = "cameraSetup") {
+  if (!Array.isArray(songs) || songs.length === 0) {
+    state = "error";
+    loadingMessage = "곡 목록 로딩 실패\nsongs 배열이 없음";
+    return;
+  }
+  if (chartRequested) return;
+
   state = "loading";
   chartRequested = true;
   loadingMessage = "채보 로딩 중";
@@ -145,7 +181,7 @@ function selectSong(index) {
       }
       chart = loaded;
       resetGame();
-      state = "ready";
+      state = nextState;
       chartRequested = false;
     },
     (error) => {
@@ -175,9 +211,10 @@ function resetGame() {
 }
 
 async function startGame() {
-  if (state !== "ready" && state !== "finished") return;
+  if (state !== "howTo") return;
   if (!nose) {
     showJudge("FACE REQUIRED");
+    state = "cameraSetup";
     return;
   }
   if (!pianoReady) {
@@ -209,7 +246,7 @@ function updateNotes() {
   }
 
   const last = notes[notes.length - 1];
-  if (last && gameTime > last.time + 1800) state = "finished";
+  if (last && gameTime > last.time + 1800) state = "result";
 }
 
 function hitNote(note, delta) {
@@ -346,13 +383,13 @@ function drawGame() {
   }
 }
 
-function drawUi() {
+function drawPlayingUi() {
   const stage = stageRect();
   const song = songs[selectedSong] || {};
 
   noStroke();
-  fill(0, 0, 0, 176);
-  rect(stage.x, stage.y, stage.w, 92);
+  fill(0, 0, 0, 168);
+  rect(stage.x, stage.y, stage.w, 76);
 
   fill(255);
   textAlign(LEFT, TOP);
@@ -362,13 +399,9 @@ function drawUi() {
   textStyle(NORMAL);
   textSize(12);
   fill(230);
-  text(
-    `${score}  ${combo} combo  ${hits}/${hits + misses}`,
-    stage.x + 18,
-    stage.y + 45,
-  );
-
-  drawSongTabs(stage);
+  text(`SCORE ${score}`, stage.x + 18, stage.y + 45);
+  textAlign(RIGHT, TOP);
+  text(`COMBO ${combo}`, stage.x + stage.w - 18, stage.y + 45);
 
   if (judge && millis() - judgeAt < 520) {
     textAlign(CENTER, CENTER);
@@ -377,53 +410,158 @@ function drawUi() {
     fill(255);
     text(judge, stage.x + stage.w / 2, hitLineY() - 64);
   }
-
-  if (state !== "playing") drawOverlay(stage);
-  if (state === "playing" && !nose) drawCenterText(stage, "FACE LOST");
 }
 
-function drawSongTabs(stage) {
-  const y = stage.y + 64;
-  let x = stage.x + 18;
-  textAlign(LEFT, CENTER);
-  textSize(11);
+function drawMainScreen() {
+  clearButtons();
+  const stage = stageRect();
+
+  fill(255);
+  noStroke();
+  textAlign(CENTER, CENTER);
   textStyle(BOLD);
-  for (let i = 0; i < songs.length; i += 1) {
-    const label = songs[i].title;
-    const w = textWidth(label) + 20;
-    fill(
-      i === selectedSong ? 255 : 0,
-      i === selectedSong ? 255 : 0,
-      i === selectedSong ? 255 : 0,
-      i === selectedSong ? 245 : 0,
-    );
-    stroke(255, 255, 255, 170);
-    strokeWeight(1);
-    rect(x, y, w, 24, 4);
-    noStroke();
-    fill(i === selectedSong ? 0 : 255);
-    text(label, x + 10, y + 12);
-    songs[i].tab = { x, y, w, h: 24 };
-    x += w + 8;
-  }
+  textSize(42);
+  text("NOSE\nPIANO\nRUSH", stage.x + stage.w / 2, stage.y + stage.h * 0.34);
+
+  textStyle(NORMAL);
+  textSize(16);
+  text("2조 정제훈 한채아", stage.x + stage.w / 2, stage.y + stage.h * 0.62);
+
+  drawButton("start", "START", stage.x + 54, stage.y + stage.h - 116, stage.w - 108, 54, true);
 }
 
-function drawOverlay(stage) {
+function drawSongSelectScreen() {
+  clearButtons();
+  const stage = stageRect();
+  fill(255);
+  noStroke();
+  textAlign(CENTER, TOP);
+  textStyle(BOLD);
+  textSize(28);
+  text("SONG SELECT", stage.x + stage.w / 2, stage.y + 38);
+
+  const cardH = 76;
+  const gap = 14;
+  const top = stage.y + 104;
+  for (let i = 0; i < songs.length; i += 1) {
+    const song = songs[i];
+    const meta = SONG_META[song.id] || { difficulty: "NORMAL", length: "--s" };
+    const x = stage.x + 28;
+    const y = top + i * (cardH + gap);
+    const selected = i === selectedSong;
+
+    stroke(255);
+    strokeWeight(1.5);
+    fill(selected ? 255 : 0);
+    rect(x, y, stage.w - 56, cardH, 6);
+    noStroke();
+    fill(selected ? 0 : 255);
+    textAlign(LEFT, TOP);
+    textStyle(BOLD);
+    textSize(20);
+    text(song.title, x + 18, y + 14);
+    textStyle(NORMAL);
+    textSize(12);
+    text(`${meta.difficulty}  /  ${meta.length}`, x + 18, y + 46);
+    uiButtons.push({ id: `song:${i}`, x, y, w: stage.w - 56, h: cardH, enabled: true });
+  }
+
+  drawButton("playSong", "PLAY", stage.x + 54, stage.y + stage.h - 96, stage.w - 108, 54, true);
+}
+
+function drawLoadingScreen() {
+  clearButtons();
+  drawCenterText(stageRect(), loadingMessage);
+}
+
+function drawCameraSetupScreen() {
+  clearButtons();
+  const stage = stageRect();
   fill(0, 0, 0, 170);
   rect(stage.x, stage.y, stage.w, stage.h);
 
-  if (state === "finished") {
-    drawCenterText(
-      stage,
-      `FINISH\n${score} / ${maxCombo} combo\n터치해서 다시 시작`,
-    );
-  } else if (state === "ready" && nose) {
-    drawCenterText(stage, "터치하면 시작");
-  } else if (state === "ready") {
-    drawCenterText(stage, "얼굴을 카메라에 보여주세요");
-  } else {
-    drawCenterText(stage, loadingMessage);
-  }
+  fill(255);
+  noStroke();
+  textAlign(CENTER, TOP);
+  textStyle(BOLD);
+  textSize(26);
+  text("CAMERA SETUP", stage.x + stage.w / 2, stage.y + 42);
+
+  noFill();
+  stroke(255);
+  strokeWeight(2);
+  const guideW = stage.w * 0.54;
+  const guideH = stage.h * 0.32;
+  rect(stage.x + (stage.w - guideW) / 2, stage.y + stage.h * 0.22, guideW, guideH, 10);
+
+  noStroke();
+  fill(255);
+  textStyle(NORMAL);
+  textSize(18);
+  text(
+    nose ? "얼굴 인식 완료" : "화면 중앙에 얼굴을 맞춰주세요",
+    stage.x + stage.w / 2,
+    stage.y + stage.h * 0.62,
+  );
+
+  drawButton("cameraOk", "OK", stage.x + 54, stage.y + stage.h - 96, stage.w - 108, 54, !!nose);
+}
+
+function drawHowToScreen() {
+  clearButtons();
+  const stage = stageRect();
+
+  fill(255);
+  noStroke();
+  textAlign(CENTER, TOP);
+  textStyle(BOLD);
+  textSize(28);
+  text("HOW TO PLAY", stage.x + stage.w / 2, stage.y + 50);
+
+  textStyle(NORMAL);
+  textSize(17);
+  textAlign(LEFT, TOP);
+  const x = stage.x + 42;
+  const y = stage.y + 150;
+  text("1. 노트가 아래로 떨어집니다", x, y);
+  text("2. 코를 움직여 노트에 맞추세요", x, y + 54);
+  text("3. 정확한 타이밍에 맞추면 점수를 얻습니다", x, y + 108);
+
+  drawButton("startGame", "PLAY", stage.x + 54, stage.y + stage.h - 96, stage.w - 108, 54, true);
+}
+
+function drawResultScreen() {
+  clearButtons();
+  const stage = stageRect();
+  const accuracy = resultAccuracy();
+
+  fill(255);
+  noStroke();
+  textAlign(CENTER, TOP);
+  textStyle(BOLD);
+  textSize(28);
+  text("RESULT", stage.x + stage.w / 2, stage.y + 36);
+
+  textSize(72);
+  text(resultRank(accuracy), stage.x + stage.w / 2, stage.y + 92);
+
+  textStyle(NORMAL);
+  textSize(17);
+  textAlign(LEFT, TOP);
+  const x = stage.x + 52;
+  const y = stage.y + 218;
+  text(`SCORE       ${score}`, x, y);
+  text(`ACCURACY    ${accuracy.toFixed(1)}%`, x, y + 38);
+  text(`MAX COMBO   ${maxCombo}`, x, y + 76);
+  text(`HIT / MISS  ${hits} / ${misses}`, x, y + 114);
+
+  textAlign(CENTER, TOP);
+  textSize(14);
+  text("2조 정제훈 한채아", stage.x + stage.w / 2, stage.y + stage.h - 164);
+
+  const buttonW = (stage.w - 76) / 2;
+  drawButton("retry", "RETRY", stage.x + 28, stage.y + stage.h - 96, buttonW, 54, true);
+  drawButton("song", "SONG", stage.x + 48 + buttonW, stage.y + stage.h - 96, buttonW, 54, true);
 }
 
 function drawCenterText(stage, message) {
@@ -433,6 +571,24 @@ function drawCenterText(stage, message) {
   textStyle(BOLD);
   textSize(22);
   text(message, stage.x + stage.w / 2, stage.y + stage.h / 2);
+}
+
+function drawButton(id, label, x, y, w, h, enabled) {
+  stroke(enabled ? 255 : 110);
+  strokeWeight(1.5);
+  fill(enabled ? 255 : 0);
+  rect(x, y, w, h, 6);
+  noStroke();
+  fill(enabled ? 0 : 130);
+  textAlign(CENTER, CENTER);
+  textStyle(BOLD);
+  textSize(20);
+  text(label, x + w / 2, y + h / 2);
+  uiButtons.push({ id, x, y, w, h, enabled });
+}
+
+function clearButtons() {
+  uiButtons = [];
 }
 
 function showJudge(label) {
@@ -451,29 +607,43 @@ function mousePressed() {
 }
 
 function handlePress(x, y) {
-  if (state !== "playing") {
-    for (let i = 0; i < songs.length; i += 1) {
-      const tab = songs[i].tab;
-      if (
-        tab &&
-        x >= tab.x &&
-        x <= tab.x + tab.w &&
-        y >= tab.y &&
-        y <= tab.y + tab.h
-      ) {
-        selectSong(i);
-        return;
-      }
-    }
+  const button = uiButtons.find(
+    (item) =>
+      item.enabled &&
+      x >= item.x &&
+      x <= item.x + item.w &&
+      y >= item.y &&
+      y <= item.y + item.h,
+  );
+  if (!button) return;
+
+  if (button.id === "start") {
+    state = "songSelect";
+  } else if (button.id.startsWith("song:")) {
+    selectSong(Number(button.id.split(":")[1]));
+  } else if (button.id === "playSong") {
+    loadSelectedSong("cameraSetup");
+  } else if (button.id === "cameraOk") {
+    state = "howTo";
+  } else if (button.id === "startGame") {
+    startGame();
+  } else if (button.id === "retry") {
+    resetGame();
+    state = "howTo";
+  } else if (button.id === "song") {
+    resetGame();
+    state = "songSelect";
   }
-  startGame();
 }
 
 function keyPressed() {
-  if (key === " ") startGame();
-  if (keyCode === RIGHT_ARROW && state !== "playing")
+  if (key === " " && state === "howTo") startGame();
+  if (keyCode === ENTER && state === "main") state = "songSelect";
+  if (keyCode === ENTER && state === "songSelect") loadSelectedSong("cameraSetup");
+  if (keyCode === ENTER && state === "cameraSetup" && nose) state = "howTo";
+  if (keyCode === RIGHT_ARROW && state === "songSelect")
     selectSong(selectedSong + 1);
-  if (keyCode === LEFT_ARROW && state !== "playing")
+  if (keyCode === LEFT_ARROW && state === "songSelect")
     selectSong(selectedSong - 1);
   return false;
 }
@@ -494,4 +664,17 @@ function stageRect() {
 function hitLineY() {
   const stage = stageRect();
   return stage.y + stage.h * GAME_CONFIG.hitLineY;
+}
+
+function resultAccuracy() {
+  const total = hits + misses;
+  if (total === 0) return 0;
+  return (hits / total) * 100;
+}
+
+function resultRank(accuracy) {
+  if (accuracy >= 95) return "S";
+  if (accuracy >= 85) return "A";
+  if (accuracy >= 70) return "B";
+  return "C";
 }
