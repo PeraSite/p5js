@@ -114,6 +114,29 @@ function missNote(note) {
  * @param {object} note - time, x 등 채보 노트
  * @returns {{ x: number, y: number, visible: boolean }} 그리기·충돌 판정용 좌표
  */
+/**
+ * hits·misses 기준 정확도(%)를 계산한다.
+ * @author 정제훈
+ * @returns {number} 0~100
+ */
+function playAccuracy() {
+  const total = Play.hits + Play.misses;
+  return total ? (Play.hits / total) * 100 : 0;
+}
+
+/**
+ * 정확도 기준 등급(S/A/B/C)을 반환한다.
+ * @author 정제훈
+ * @returns {string}
+ */
+function playRank() {
+  const accuracy = playAccuracy();
+  if (accuracy >= 95) return "S";
+  if (accuracy >= 85) return "A";
+  if (accuracy >= 70) return "B";
+  return "C";
+}
+
 function notePosition(note) {
   const stage = stageRect();
   const hitY = stage.y + stage.h * GAME_CONFIG.hitLineY;

@@ -3,7 +3,6 @@
  * @author 한채아
  */
 function drawPlayingScreen() {
-  Play.gameTime = millis() - Play.startedAt;
   updateNotes();
   drawCamera();
   drawPlayfield();

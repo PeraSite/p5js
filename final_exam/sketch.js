@@ -40,6 +40,7 @@ function draw() {
 
   switch (App.state) {
     case "playing":
+      Play.gameTime = millis() - Play.startedAt;
       drawPlayingScreen();
       break;
     case "cameraSetup":

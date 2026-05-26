@@ -5,16 +5,8 @@
 function drawResultScreen() {
   background(0);
   const stage = stageRect();
-  const total = Play.hits + Play.misses;
-  const accuracy = total ? (Play.hits / total) * 100 : 0;
-  const rank =
-    accuracy >= 95
-      ? "S"
-      : accuracy >= 85
-        ? "A"
-        : accuracy >= 70
-          ? "B"
-          : "C";
+  const accuracy = playAccuracy();
+  const rank = playRank();
 
   fill(255);
   noStroke();
