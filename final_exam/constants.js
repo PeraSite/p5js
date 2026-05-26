@@ -12,7 +12,6 @@ const GAME_CONFIG = {
   hitLineY: 0.72,
   noseRadius: 26,
   noteSize: 38,
-  smoothing: 0.38,
   judgeWindows: [
     { label: "EXCELLENT", window: 45, score: 1000 },
     { label: "GREAT", window: 90, score: 700 },

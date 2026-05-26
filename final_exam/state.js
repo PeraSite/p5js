@@ -36,7 +36,6 @@ const Face = {
   faceMesh: null,
   faces: [],
   nose: null,
-  smoothNose: null,
 };
 
 /**

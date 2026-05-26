@@ -43,25 +43,21 @@ function setupCamera() {
 }
 
 /**
- * 얼굴 랜드마크를 스테이지 좌표의 코 위치(Face.nose)로 변환·스무딩한다.
+ * 얼굴 랜드마크를 스테이지 좌표의 코 위치(Face.nose)로 변환한다.
  * @author 정제훈
  * Face.nose에 {x,y} 저장, 미감지 시 null
  */
 function updateNose() {
   if (!Face.faces[0]) {
     Face.nose = null;
-    Face.smoothNose = null;
     return;
   }
 
   const point = Face.faces[0].keypoints[1];
   const stage = stageRect();
   const crop = cameraCrop();
-  const x = stage.x + stage.w * (1 - (point.x - crop.x) / crop.w);
-  const y = stage.y + stage.h * ((point.y - crop.y) / crop.h);
-
-  if (!Face.smoothNose) Face.smoothNose = createVector(x, y);
-  Face.smoothNose.x = lerp(Face.smoothNose.x, x, GAME_CONFIG.smoothing);
-  Face.smoothNose.y = lerp(Face.smoothNose.y, y, GAME_CONFIG.smoothing);
-  Face.nose = { x: Face.smoothNose.x, y: Face.smoothNose.y };
+  Face.nose = {
+    x: stage.x + stage.w * (1 - (point.x - crop.x) / crop.w),
+    y: stage.y + stage.h * ((point.y - crop.y) / crop.h),
+  };
 }
