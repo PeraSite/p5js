@@ -10,16 +10,19 @@
  * @param {() => void} onClick - 클릭 시 실행 함수
  */
 function drawButton(label, x, y, w, h, enabled, onClick) {
-  stroke(enabled ? 255 : 110);
-  strokeWeight(1.5);
-  fill(enabled ? 255 : 0);
-  rect(x, y, w, h, 6);
-  noStroke();
-  fill(enabled ? 0 : 130);
-  textAlign(CENTER, CENTER);
-  textStyle(BOLD);
-  textSize(20);
-  text(label, x + w / 2, y + h / 2);
+  drawBox(x, y, w, h, {
+    fill: enabled ? 255 : 0,
+    stroke: enabled ? 255 : 110,
+    strokeWeight: 1.5,
+    radius: 6,
+  });
+  drawText(label, x + w / 2, y + h / 2, {
+    size: 20,
+    alignH: CENTER,
+    alignV: CENTER,
+    style: BOLD,
+    fill: enabled ? 0 : 130,
+  });
   App.uiButtons.push({ x, y, w, h, enabled, onClick: enabled ? onClick : null });
 }
 

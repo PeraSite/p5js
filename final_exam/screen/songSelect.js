@@ -5,12 +5,13 @@
 function drawSongSelectScreen() {
   background(0);
   const stage = stageRect();
-  fill(255);
-  noStroke();
-  textAlign(CENTER, TOP);
-  textStyle(BOLD);
-  textSize(28);
-  text("SONG SELECT", stage.x + stage.w / 2, stage.y + 38);
+
+  drawText("SONG SELECT", stage.x + stage.w / 2, stage.y + 38, {
+    size: 28,
+    alignH: CENTER,
+    alignV: TOP,
+    style: BOLD,
+  });
 
   const cardH = 76;
   const gap = 14;
@@ -19,24 +20,18 @@ function drawSongSelectScreen() {
     const song = App.songs[i];
     const x = stage.x + 28;
     const y = top + i * (cardH + gap);
-    const selected = i === App.selectedSong;
-
-    stroke(255);
-    strokeWeight(1.5);
-    fill(selected ? 255 : 0);
-    rect(x, y, stage.w - 56, cardH, 6);
-    noStroke();
-    fill(selected ? 0 : 255);
-    textAlign(LEFT, TOP);
-    textStyle(BOLD);
-    textSize(20);
-    text(song.title, x + 18, y + 14);
-    textStyle(NORMAL);
-    textSize(12);
-    text(`${song.difficulty}  /  ${song.length}s`, x + 18, y + 46);
-
     const index = i;
-    registerButton(x, y, stage.w - 56, cardH, true, () => selectSong(index));
+
+    drawSelectableCard(
+      x,
+      y,
+      stage.w - 56,
+      cardH,
+      i === App.selectedSong,
+      song.title,
+      `${song.difficulty}  /  ${song.length}s`,
+      () => selectSong(index),
+    );
   }
 
   drawButton(

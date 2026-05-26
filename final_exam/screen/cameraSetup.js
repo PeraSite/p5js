@@ -6,31 +6,29 @@ function drawCameraSetupScreen() {
   drawCamera();
 
   const stage = stageRect();
-  fill(0, 0, 0, 170);
-  rect(stage.x, stage.y, stage.w, stage.h);
+  drawBox(stage.x, stage.y, stage.w, stage.h, { fill: [0, 0, 0, 170] });
 
-  fill(255);
-  noStroke();
-  textAlign(CENTER, TOP);
-  textStyle(BOLD);
-  textSize(26);
-  text("CAMERA SETUP", stage.x + stage.w / 2, stage.y + 42);
+  drawText("CAMERA SETUP", stage.x + stage.w / 2, stage.y + 42, {
+    size: 26,
+    alignH: CENTER,
+    alignV: TOP,
+    style: BOLD,
+  });
 
-  noFill();
-  stroke(255);
-  strokeWeight(2);
   const guideW = stage.w * 0.54;
   const guideH = stage.h * 0.32;
-  rect(stage.x + (stage.w - guideW) / 2, stage.y + stage.h * 0.22, guideW, guideH, 10);
+  drawBox(stage.x + (stage.w - guideW) / 2, stage.y + stage.h * 0.22, guideW, guideH, {
+    fill: false,
+    stroke: 255,
+    strokeWeight: 2,
+    radius: 10,
+  });
 
-  noStroke();
-  fill(255);
-  textStyle(NORMAL);
-  textSize(18);
-  text(
+  drawText(
     Face.nose ? "얼굴 인식 완료" : "화면 중앙에 얼굴을 맞춰주세요",
     stage.x + stage.w / 2,
     stage.y + stage.h * 0.62,
+    { size: 18, alignH: CENTER, alignV: TOP },
   );
 
   drawButton(

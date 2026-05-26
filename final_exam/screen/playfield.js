@@ -13,16 +13,16 @@ function drawPlayfield() {
   strokeWeight(1);
   line(stage.x, lineY, stage.x + stage.w, lineY);
 
-  noStroke();
-  textAlign(CENTER, CENTER);
-  textStyle(BOLD);
-  textSize(GAME_CONFIG.noteSize);
   for (const note of Play.notes) {
     if (note.hit || note.missed) continue;
     const pos = notePosition(note);
     if (!pos.visible) continue;
-    fill(255);
-    text("♪", pos.x, pos.y);
+    drawText("♪", pos.x, pos.y, {
+      size: GAME_CONFIG.noteSize,
+      alignH: CENTER,
+      alignV: CENTER,
+      style: BOLD,
+    });
   }
 
   if (Face.nose) {

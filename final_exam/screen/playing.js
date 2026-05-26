@@ -11,35 +11,42 @@ function drawPlayingScreen() {
   const song = App.songs[App.selectedSong];
   const hitY = stage.y + stage.h * GAME_CONFIG.hitLineY;
 
-  noStroke();
-  fill(0, 0, 0, 168);
-  rect(stage.x, stage.y, stage.w, 76);
+  drawBox(stage.x, stage.y, stage.w, 76, { fill: [0, 0, 0, 168] });
 
-  fill(255);
-  textAlign(LEFT, TOP);
-  textStyle(BOLD);
-  textSize(18);
-  text(song.title, stage.x + 18, stage.y + 16);
-  textStyle(NORMAL);
-  textSize(12);
-  fill(230);
-  text(`SCORE ${Play.score}`, stage.x + 18, stage.y + 45);
-  textAlign(RIGHT, TOP);
-  text(`COMBO ${Play.combo}`, stage.x + stage.w - 18, stage.y + 45);
+  drawText(song.title, stage.x + 18, stage.y + 16, {
+    size: 18,
+    alignH: LEFT,
+    alignV: TOP,
+    style: BOLD,
+  });
+  drawText(`SCORE ${Play.score}`, stage.x + 18, stage.y + 45, {
+    size: 12,
+    alignH: LEFT,
+    alignV: TOP,
+    fill: 230,
+  });
+  drawText(`COMBO ${Play.combo}`, stage.x + stage.w - 18, stage.y + 45, {
+    size: 12,
+    alignH: RIGHT,
+    alignV: TOP,
+    fill: 230,
+  });
 
   if (Play.judge && millis() - Play.judgeAt < 520) {
-    textAlign(CENTER, CENTER);
-    textStyle(BOLD);
-    textSize(28);
-    fill(255);
-    text(Play.judge, stage.x + stage.w / 2, hitY - 64);
+    drawText(Play.judge, stage.x + stage.w / 2, hitY - 64, {
+      size: 28,
+      alignH: CENTER,
+      alignV: CENTER,
+      style: BOLD,
+    });
   }
 
   if (!Face.nose) {
-    textAlign(CENTER, CENTER);
-    textStyle(BOLD);
-    textSize(22);
-    fill(255);
-    text("FACE LOST", stage.x + stage.w / 2, stage.y + stage.h / 2);
+    drawText("FACE LOST", stage.x + stage.w / 2, stage.y + stage.h / 2, {
+      size: 22,
+      alignH: CENTER,
+      alignV: CENTER,
+      style: BOLD,
+    });
   }
 }

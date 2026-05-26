@@ -26,7 +26,5 @@ function drawCamera() {
   drawingContext.restore();
   pop();
 
-  noStroke();
-  fill(0, 0, 0, 112);
-  rect(stage.x, stage.y, stage.w, stage.h);
+  drawBox(stage.x, stage.y, stage.w, stage.h, { fill: [0, 0, 0, 112] });
 }
