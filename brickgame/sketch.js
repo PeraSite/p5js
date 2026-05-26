@@ -13,6 +13,10 @@ let paddleX;
 let paddleY;
 
 let bricks = [];
+let particles = [];
+let scorePopups = [];
+let shakeFrames = 0;
+let audioReady = false;
 
 function setup() {
   createCanvas(CANVAS_SIZE, CANVAS_SIZE);
@@ -24,6 +28,10 @@ function setup() {
 function draw() {
   drawBackground();
 
+  let shake = getScreenShakeOffset();
+  push();
+  translate(shake.x, shake.y);
+
   if (gameState === "playing") {
     handlePaddleInput();
     moveBall();
@@ -32,24 +40,42 @@ function draw() {
     handleBrickCollision();
     handleMissedBall();
     handleGridReset();
+    updateParticles();
+    updateScorePopups();
   } else {
     keepBallOnPaddle();
+    updateParticles();
+    updateScorePopups();
   }
 
   drawBricks();
   drawPaddle();
   drawBall();
+  drawParticles();
+  drawScorePopups();
+
+  pop();
+
   drawUI();
   drawMessage();
 }
 
 function keyPressed() {
+  ensureAudio();
+
   if (key === " " && gameState === "ready") {
     launchBall();
   }
 
   if ((key === "r" || key === "R") && gameState === "gameOver") {
     startNewGame();
+  }
+}
+
+function ensureAudio() {
+  if (!audioReady) {
+    userStartAudio();
+    audioReady = true;
   }
 }
 
@@ -60,6 +86,9 @@ function startNewGame() {
   ballSpeed = INITIAL_BALL_SPEED;
   paddleX = width / 2;
   paddleY = height - PADDLE_BOTTOM_MARGIN;
+  particles = [];
+  scorePopups = [];
+  shakeFrames = 0;
   createBricks();
   resetBall();
 }
@@ -107,6 +136,7 @@ function drawUI() {
   textSize(18);
   textAlign(LEFT, CENTER);
   text("SCORE " + score, 32, 32);
+  text("WAVE " + (resets + 1), 32, 58);
   textAlign(RIGHT, CENTER);
   text("LIVES " + lives, width - 32, 32);
 }
@@ -134,7 +164,8 @@ function drawMessage() {
 }
 
 function drawPaddle() {
-  noStroke();
+  stroke(200, 255, 245);
+  strokeWeight(2);
   fill(85, 225, 210);
   rect(paddleX, paddleY, PADDLE_WIDTH, PADDLE_HEIGHT, 4);
 }
@@ -162,10 +193,12 @@ function drawBricks() {
           alpha = map(brick.health, BRICK_HEALTH_MIN, brick.maxHealth, BRICK_MIN_ALPHA, BRICK_MAX_ALPHA);
         }
 
-        noStroke();
+        stroke(baseColor[0] * 0.55, baseColor[1] * 0.55, baseColor[2] * 0.55, alpha);
+        strokeWeight(2);
         fill(baseColor[0], baseColor[1], baseColor[2], alpha);
         rect(x, y, BRICK_WIDTH, BRICK_HEIGHT, 4);
 
+        noStroke();
         fill(255, alpha);
         textSize(14);
         textAlign(CENTER, CENTER);
@@ -176,6 +209,10 @@ function drawBricks() {
 }
 
 function handlePaddleInput() {
+  if (keyIsDown(LEFT_ARROW) || keyIsDown(RIGHT_ARROW)) {
+    ensureAudio();
+  }
+
   if (keyIsDown(LEFT_ARROW)) {
     paddleX -= PADDLE_SPEED;
   }
@@ -200,16 +237,19 @@ function handleWallCollision() {
   if (ballX - BALL_RADIUS < PLAY_AREA_SIDE_MARGIN) {
     ballX = PLAY_AREA_SIDE_MARGIN + BALL_RADIUS;
     ballVelX *= -1;
+    playArcadeTone(SOUND_FREQ_WALL, 0.08);
   }
 
   if (ballX + BALL_RADIUS > width - PLAY_AREA_SIDE_MARGIN) {
     ballX = width - PLAY_AREA_SIDE_MARGIN - BALL_RADIUS;
     ballVelX *= -1;
+    playArcadeTone(SOUND_FREQ_WALL, 0.08);
   }
 
   if (ballY - BALL_RADIUS < PLAY_AREA_TOP) {
     ballY = PLAY_AREA_TOP + BALL_RADIUS;
     ballVelY *= -1;
+    playArcadeTone(SOUND_FREQ_WALL, 0.08);
   }
 }
 
@@ -221,10 +261,10 @@ function handlePaddleCollision() {
   if (checkCircleRectCollision(ballX, ballY, BALL_RADIUS, paddleX, paddleY, PADDLE_WIDTH, PADDLE_HEIGHT)) {
     let hitPosition = constrain((ballX - paddleX) / (PADDLE_WIDTH / 2), -1, 1);
 
-    // The hit position gives the player control: center hits go upward, edge hits angle sideways.
     ballVelX = hitPosition * ballSpeed;
     ballVelY = -sqrt(ballSpeed * ballSpeed - ballVelX * ballVelX * PADDLE_BOUNCE_X_WEIGHT);
     ballY = paddleY - PADDLE_HEIGHT / 2 - BALL_RADIUS;
+    playArcadeTone(SOUND_FREQ_PADDLE, 0.1);
   }
 }
 
@@ -244,7 +284,15 @@ function handleBrickCollision() {
           bounceBallFromBrick(x, y);
 
           if (brick.health === 0) {
-            score += brick.maxHealth * BRICK_SCORE_MULTIPLIER;
+            let points = brick.maxHealth * BRICK_SCORE_MULTIPLIER;
+            score += points;
+            let color = BRICK_COLORS[brick.maxHealth - 1];
+            spawnParticles(x, y, color, PARTICLE_COUNT);
+            spawnScorePopup(x, y, points);
+            triggerScreenShake();
+            playArcadeTone(SOUND_FREQ_BRICK_BREAK[brick.maxHealth - 1], 0.14);
+          } else {
+            playArcadeTone(SOUND_FREQ_BRICK_HIT, 0.06);
           }
 
           return;
@@ -265,7 +313,6 @@ function bounceBallFromBrick(brickX, brickY) {
     BRICK_HEIGHT
   );
 
-  // The smaller overlap is the side the ball most likely entered from.
   if (collisionSide === "horizontal") {
     ballVelX *= -1;
   } else {

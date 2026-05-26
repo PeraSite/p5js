@@ -50,3 +50,18 @@ const INITIAL_LAUNCH_X_RATIO = 0.45;
 
 // 패들 가장자리에 맞은 공이 너무 수평으로만 날아가지 않게 보정한다.
 const PADDLE_BOUNCE_X_WEIGHT = 0.45;
+
+const PARTICLE_COUNT = 10;
+const PARTICLE_LIFE_DECAY = 0.045;
+const PARTICLE_GRAVITY = 0.18;
+
+const SHAKE_FRAMES = 10;
+const SHAKE_INTENSITY = 5;
+
+const SCORE_POPUP_LIFE_DECAY = 0.028;
+const SCORE_POPUP_RISE = 1.2;
+
+const SOUND_FREQ_WALL = 220;
+const SOUND_FREQ_PADDLE = 330;
+const SOUND_FREQ_BRICK_HIT = 440;
+const SOUND_FREQ_BRICK_BREAK = [523, 659, 784];
