@@ -4,7 +4,6 @@
  * drawCamera()는 sketch에서 먼저 호출됨
  */
 function drawCameraSetupScreen() {
-  clearButtons();
   const stage = stageRect();
   fill(0, 0, 0, 170);
   rect(stage.x, stage.y, stage.w, stage.h);

@@ -1,12 +1,4 @@
 /**
- * 이번 프레임에 등록된 UI 버튼 목록을 비운다.
- * @author 한채아
- */
-function clearButtons() {
-  App.uiButtons = [];
-}
-
-/**
  * 라벨이 있는 버튼을 그리고 클릭 영역을 App.uiButtons에 등록한다.
  * @author 한채아
  * @param {string} label - 버튼 텍스트
@@ -60,7 +52,7 @@ function handlePress(x, y) {
       y >= item.y &&
       y <= item.y + item.h,
   );
-  if (button?.onClick) button.onClick();
+  if (button && button.onClick) button.onClick();
 }
 
 /**

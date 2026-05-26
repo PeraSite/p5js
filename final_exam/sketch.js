@@ -4,8 +4,8 @@
  */
 function preload() {
   loadJSON(GAME_CONFIG.songsPath, (catalog) => {
-    App.songCatalog = catalog;
-    for (const song of catalog.songs) {
+    App.songs = catalog.songs;
+    for (const song of App.songs) {
       song.chartData = loadJSON(song.chart);
     }
   });
@@ -26,7 +26,6 @@ function setup() {
   textFont("Arial");
   setupPiano();
   setupCamera();
-  App.songs = App.songCatalog.songs;
   App.selectedSong = 0;
   App.state = "main";
 }
@@ -37,13 +36,14 @@ function setup() {
  */
 function draw() {
   updateNose();
+  App.uiButtons = [];
 
   if (App.state === "playing") {
-    tickPlaying();
+    Play.gameTime = millis() - Play.startedAt;
+    updateNotes();
     drawCamera();
     drawPlayfield();
     drawPlayingScreen();
-    drawFaceLostHint();
     return;
   }
 
@@ -67,9 +67,6 @@ function draw() {
     case "result":
       drawResultScreen();
       break;
-    default:
-      drawLoadingScreen();
-      break;
   }
 }
 
@@ -89,8 +86,10 @@ function windowResized() {
 function keyPressed() {
   if (key === " " && App.state === "howTo") startGame();
   if (keyCode === ENTER && App.state === "main") App.state = "songSelect";
-  if (keyCode === ENTER && App.state === "songSelect")
-    loadSelectedSong("cameraSetup");
+  if (keyCode === ENTER && App.state === "songSelect") {
+    resetGame();
+    App.state = "cameraSetup";
+  }
   if (keyCode === ENTER && App.state === "cameraSetup" && Face.nose)
     App.state = "howTo";
   if (keyCode === RIGHT_ARROW && App.state === "songSelect")

@@ -32,20 +32,14 @@ function setupCamera() {
       },
       audio: false,
     },
-    () => Face.faceMesh.detectStart(Face.video, gotFaces),
+    () =>
+      Face.faceMesh.detectStart(Face.video, (results) => {
+        Face.faces = results;
+      }),
   );
   Face.video.size(GAME_CONFIG.cameraWidth, GAME_CONFIG.cameraHeight);
   Face.video.elt.muted = true;
   Face.video.hide();
-}
-
-/**
- * faceMesh 감지 결과를 Face.faces에 저장한다.
- * @author 정제훈
- * @param {object[]} results - ml5 faceMesh 결과 배열
- */
-function gotFaces(results) {
-  Face.faces = results || [];
 }
 
 /**
@@ -54,14 +48,13 @@ function gotFaces(results) {
  * Face.nose에 {x,y} 저장, 미감지 시 null
  */
 function updateNose() {
-  const point =
-    Face.faces[0]?.keypoints?.[1] || Face.faces[0]?.keypoints?.[4] || null;
-  if (!point) {
+  if (!Face.faces[0]) {
     Face.nose = null;
     Face.smoothNose = null;
     return;
   }
 
+  const point = Face.faces[0].keypoints[1];
   const stage = stageRect();
   const crop = cameraCrop();
   const x = stage.x + stage.w * (1 - (point.x - crop.x) / crop.w);

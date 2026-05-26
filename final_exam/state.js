@@ -7,7 +7,6 @@ const App = {
   selectedSong: 0,
   uiButtons: [],
   songs: [],
-  songCatalog: null,
 };
 
 /**

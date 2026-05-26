@@ -6,14 +6,3 @@
 function selectSong(index) {
   App.selectedSong = (index + App.songs.length) % App.songs.length;
 }
-
-/**
- * 선택 곡의 preload된 채보를 Play.chart에 넣고 화면을 전환한다.
- * @author 정제훈
- * @param {string} [nextState="cameraSetup"] - 전환할 App.state
- */
-function loadSelectedSong(nextState = "cameraSetup") {
-  Play.chart = App.songs[App.selectedSong].chartData;
-  resetGame();
-  App.state = nextState;
-}

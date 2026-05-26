@@ -3,7 +3,8 @@
  * @author 정제훈
  */
 function resetGame() {
-  Play.notes = (Play.chart?.notes || []).map((note, index) => ({
+  Play.chart = App.songs[App.selectedSong].chartData;
+  Play.notes = Play.chart.notes.map((note, index) => ({
     ...note,
     id: index,
     hit: false,
@@ -26,27 +27,20 @@ function resetGame() {
 async function startGame() {
   if (App.state !== "howTo") return;
   if (!Face.nose) {
-    showJudge("FACE REQUIRED");
+    Play.judge = "FACE REQUIRED";
+    Play.judgeAt = millis();
     App.state = "cameraSetup";
     return;
   }
   if (!Audio.pianoReady) {
-    showJudge("LOADING SOUND");
+    Play.judge = "LOADING SOUND";
+    Play.judgeAt = millis();
     return;
   }
   await Tone.start();
   resetGame();
   Play.startedAt = millis();
   App.state = "playing";
-}
-
-/**
- * playing 상태일 때 경과 시간을 갱신하고 노트 판정을 처리한다.
- * @author 정제훈
- */
-function tickPlaying() {
-  Play.gameTime = millis() - Play.startedAt;
-  updateNotes();
 }
 
 /**
@@ -91,8 +85,14 @@ function hitNote(note, delta) {
   Play.combo += 1;
   Play.maxCombo = max(Play.maxCombo, Play.combo);
   Play.score += result.score + Play.combo * 12;
-  showJudge(result.label);
-  playPianoNote(note);
+  Play.judge = result.label;
+  Play.judgeAt = millis();
+  Audio.piano.triggerAttackRelease(
+    note.note,
+    note.duration,
+    Tone.immediate(),
+    0.9,
+  );
 }
 
 /**
@@ -104,7 +104,8 @@ function missNote(note) {
   note.missed = true;
   Play.misses += 1;
   Play.combo = 0;
-  showJudge("MISS");
+  Play.judge = "MISS";
+  Play.judgeAt = millis();
 }
 
 /**
@@ -115,7 +116,7 @@ function missNote(note) {
  */
 function notePosition(note) {
   const stage = stageRect();
-  const hitY = hitLineY();
+  const hitY = stage.y + stage.h * GAME_CONFIG.hitLineY;
   const startY = stage.y - GAME_CONFIG.noteSize;
   const endY = stage.y + stage.h + GAME_CONFIG.noteSize;
   const delta = Play.gameTime - note.time;
@@ -129,14 +130,4 @@ function notePosition(note) {
     y: delta <= 0 ? lerp(startY, hitY, before) : lerp(hitY, endY, after),
     visible: before >= 0 && after <= 1,
   };
-}
-
-/**
- * 화면에 잠깐 보여줄 판정 라벨을 Play에 기록한다.
- * @author 정제훈
- * @param {string} label - EXCELLENT, MISS 등
- */
-function showJudge(label) {
-  Play.judge = label;
-  Play.judgeAt = millis();
 }

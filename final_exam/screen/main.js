@@ -3,7 +3,6 @@
  * @author 한채아
  */
 function drawMainScreen() {
-  clearButtons();
   const stage = stageRect();
 
   fill(255);

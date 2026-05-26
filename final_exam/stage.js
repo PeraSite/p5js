@@ -11,13 +11,3 @@ function stageRect() {
   else h = w / GAME_CONFIG.stageRatio;
   return { x: (width - w) / 2, y: (height - h) / 2, w, h };
 }
-
-/**
- * 노트 판정선의 캔버스 Y 좌표를 계산한다.
- * @author 정제훈
- * @returns {number} 판정선 y (픽셀)
- */
-function hitLineY() {
-  const stage = stageRect();
-  return stage.y + stage.h * GAME_CONFIG.hitLineY;
-}

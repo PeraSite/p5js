@@ -3,7 +3,6 @@
  * @author 한채아
  */
 function drawSongSelectScreen() {
-  clearButtons();
   const stage = stageRect();
   fill(255);
   noStroke();
@@ -33,7 +32,7 @@ function drawSongSelectScreen() {
     text(song.title, x + 18, y + 14);
     textStyle(NORMAL);
     textSize(12);
-    text(`${song.difficulty || "NORMAL"}  /  ${song.length}s`, x + 18, y + 46);
+    text(`${song.difficulty}  /  ${song.length}s`, x + 18, y + 46);
 
     const index = i;
     registerButton(x, y, stage.w - 56, cardH, true, () => selectSong(index));
@@ -46,6 +45,9 @@ function drawSongSelectScreen() {
     stage.w - 108,
     54,
     true,
-    () => loadSelectedSong("cameraSetup"),
+    () => {
+      resetGame();
+      App.state = "cameraSetup";
+    },
   );
 }

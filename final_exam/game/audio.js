@@ -46,17 +46,3 @@ function setupPiano() {
   }).toDestination();
   Audio.piano.volume.value = -5;
 }
-
-/**
- * 채보 노트에 지정된 피치를 짧게 재생한다.
- * @author 정제훈
- * @param {{ note: string, duration?: number }} note - MIDI 이름과 길이
- */
-function playPianoNote(note) {
-  Audio.piano.triggerAttackRelease(
-    note.note,
-    note.duration || 0.28,
-    Tone.immediate(),
-    0.9,
-  );
-}

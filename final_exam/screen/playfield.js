@@ -4,7 +4,7 @@
  */
 function drawPlayfield() {
   const stage = stageRect();
-  const lineY = hitLineY();
+  const lineY = stage.y + stage.h * GAME_CONFIG.hitLineY;
 
   stroke(180, 180, 180, 125);
   strokeWeight(10);

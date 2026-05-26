@@ -3,9 +3,17 @@
  * @author 한채아
  */
 function drawResultScreen() {
-  clearButtons();
   const stage = stageRect();
-  const accuracy = resultAccuracy();
+  const total = Play.hits + Play.misses;
+  const accuracy = total ? (Play.hits / total) * 100 : 0;
+  const rank =
+    accuracy >= 95
+      ? "S"
+      : accuracy >= 85
+        ? "A"
+        : accuracy >= 70
+          ? "B"
+          : "C";
 
   fill(255);
   noStroke();
@@ -15,7 +23,7 @@ function drawResultScreen() {
   text("RESULT", stage.x + stage.w / 2, stage.y + 36);
 
   textSize(72);
-  text(resultRank(accuracy), stage.x + stage.w / 2, stage.y + 92);
+  text(rank, stage.x + stage.w / 2, stage.y + 92);
 
   textStyle(NORMAL);
   textSize(17);

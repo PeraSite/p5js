@@ -4,7 +4,8 @@
  */
 function drawPlayingScreen() {
   const stage = stageRect();
-  const song = App.songs[App.selectedSong] || {};
+  const song = App.songs[App.selectedSong];
+  const hitY = stage.y + stage.h * GAME_CONFIG.hitLineY;
 
   noStroke();
   fill(0, 0, 0, 168);
@@ -14,7 +15,7 @@ function drawPlayingScreen() {
   textAlign(LEFT, TOP);
   textStyle(BOLD);
   textSize(18);
-  text(song.title || "로딩 중", stage.x + 18, stage.y + 16);
+  text(song.title, stage.x + 18, stage.y + 16);
   textStyle(NORMAL);
   textSize(12);
   fill(230);
@@ -27,14 +28,14 @@ function drawPlayingScreen() {
     textStyle(BOLD);
     textSize(28);
     fill(255);
-    text(Play.judge, stage.x + stage.w / 2, hitLineY() - 64);
+    text(Play.judge, stage.x + stage.w / 2, hitY - 64);
   }
-}
 
-/**
- * 플레이 중 얼굴 미감지 시 경고 문구를 그린다.
- * @author 한채아
- */
-function drawFaceLostHint() {
-  if (!Face.nose) drawCenterText(stageRect(), "FACE LOST");
+  if (!Face.nose) {
+    textAlign(CENTER, CENTER);
+    textStyle(BOLD);
+    textSize(22);
+    fill(255);
+    text("FACE LOST", stage.x + stage.w / 2, stage.y + stage.h / 2);
+  }
 }
