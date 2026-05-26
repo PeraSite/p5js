@@ -3,6 +3,7 @@
  * @author 한채아
  */
 function drawResultScreen() {
+  background(0);
   const stage = stageRect();
   const total = Play.hits + Play.misses;
   const accuracy = total ? (Play.hits / total) * 100 : 0;

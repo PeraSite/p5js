@@ -38,23 +38,13 @@ function draw() {
   updateNose();
   App.uiButtons = [];
 
-  if (App.state === "playing") {
-    Play.gameTime = millis() - Play.startedAt;
-    updateNotes();
-    drawCamera();
-    drawPlayfield();
-    drawPlayingScreen();
-    return;
-  }
-
-  if (App.state === "cameraSetup") {
-    drawCamera();
-    drawCameraSetupScreen();
-    return;
-  }
-
-  background(0);
   switch (App.state) {
+    case "playing":
+      drawPlayingScreen();
+      break;
+    case "cameraSetup":
+      drawCameraSetupScreen();
+      break;
     case "main":
       drawMainScreen();
       break;

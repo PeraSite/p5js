@@ -3,6 +3,7 @@
  * @author 한채아
  */
 function drawHowToScreen() {
+  background(0);
   const stage = stageRect();
 
   fill(255);

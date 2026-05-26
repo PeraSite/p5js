@@ -1,9 +1,10 @@
 /**
  * 카메라 위에 얼굴 맞추기 안내와 OK 버튼 오버레이를 그린다.
  * @author 한채아
- * drawCamera()는 sketch에서 먼저 호출됨
  */
 function drawCameraSetupScreen() {
+  drawCamera();
+
   const stage = stageRect();
   fill(0, 0, 0, 170);
   rect(stage.x, stage.y, stage.w, stage.h);

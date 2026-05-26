@@ -3,6 +3,11 @@
  * @author 한채아
  */
 function drawPlayingScreen() {
+  Play.gameTime = millis() - Play.startedAt;
+  updateNotes();
+  drawCamera();
+  drawPlayfield();
+
   const stage = stageRect();
   const song = App.songs[App.selectedSong];
   const hitY = stage.y + stage.h * GAME_CONFIG.hitLineY;
