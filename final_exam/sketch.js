@@ -10,7 +10,7 @@ function preload() {
     }
   });
   Face.faceMesh = ml5.faceMesh({
-    maxFaces: 1,
+    maxFaces: 2,
     refineLandmarks: false,
     flipHorizontal: false,
   });
@@ -35,7 +35,7 @@ function setup() {
  * @author 한채아
  */
 function draw() {
-  updateNose();
+  updateNoses();
   App.uiButtons = [];
 
   switch (App.state) {
@@ -81,7 +81,7 @@ function keyPressed() {
     resetGame();
     App.state = "cameraSetup";
   }
-  if (keyCode === ENTER && App.state === "cameraSetup" && Face.nose)
+  if (keyCode === ENTER && App.state === "cameraSetup" && Face.noses.length > 0)
     App.state = "howTo";
   if (keyCode === RIGHT_ARROW && App.state === "songSelect")
     selectSong(App.selectedSong + 1);

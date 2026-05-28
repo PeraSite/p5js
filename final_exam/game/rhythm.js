@@ -26,7 +26,7 @@ function resetGame() {
  */
 async function startGame() {
   if (App.state !== "howTo") return;
-  if (!Face.nose) {
+  if (Face.noses.length === 0) {
     Play.judge = "FACE REQUIRED";
     Play.judgeAt = millis();
     App.state = "cameraSetup";
@@ -54,10 +54,11 @@ function updateNotes() {
 
     const pos = notePosition(note);
     const delta = Play.gameTime - note.time;
-    const touching =
-      Face.nose &&
-      dist(Face.nose.x, Face.nose.y, pos.x, pos.y) <
-        GAME_CONFIG.noseRadius + GAME_CONFIG.noteSize * 0.35;
+    const touching = Face.noses.some(
+      (nose) =>
+        dist(nose.x, nose.y, pos.x, pos.y) <
+        GAME_CONFIG.noseRadius + GAME_CONFIG.noteSize * 0.35,
+    );
 
     if (touching) {
       if (abs(delta) <= GAME_CONFIG.judgeWindows.at(-1).window) {

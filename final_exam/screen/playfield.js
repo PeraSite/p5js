@@ -25,13 +25,13 @@ function drawPlayfield() {
     });
   }
 
-  if (Face.nose) {
+  for (const nose of Face.noses) {
     noFill();
     stroke(255);
     strokeWeight(3);
-    circle(Face.nose.x, Face.nose.y, GAME_CONFIG.noseRadius * 2);
+    circle(nose.x, nose.y, GAME_CONFIG.noseRadius * 2);
     noStroke();
     fill(255);
-    circle(Face.nose.x, Face.nose.y, 7);
+    circle(nose.x, nose.y, 7);
   }
 }

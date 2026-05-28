@@ -28,14 +28,14 @@ const Play = {
 };
 
 /**
- * 얼굴 추적: 웹캠, faceMesh, 코 좌표.
+ * 얼굴 추적: 웹캠, faceMesh, 코 좌표들.
  * @author 정제훈
  */
 const Face = {
   video: null,
   faceMesh: null,
   faces: [],
-  nose: null,
+  noses: [],
 };
 
 /**

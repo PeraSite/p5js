@@ -41,7 +41,7 @@ function drawPlayingScreen() {
     });
   }
 
-  if (!Face.nose) {
+  if (Face.noses.length === 0) {
     drawText("FACE LOST", stage.x + stage.w / 2, stage.y + stage.h / 2, {
       size: 22,
       alignH: CENTER,

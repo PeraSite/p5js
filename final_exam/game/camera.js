@@ -43,21 +43,23 @@ function setupCamera() {
 }
 
 /**
- * 얼굴 랜드마크를 스테이지 좌표의 코 위치(Face.nose)로 변환한다.
+ * 얼굴 랜드마크를 스테이지 좌표의 코 위치들(Face.noses)로 변환한다.
  * @author 정제훈
- * Face.nose에 {x,y} 저장, 미감지 시 null
+ * Face.noses에 {x,y} 배열 저장, 미감지 시 빈 배열
  */
-function updateNose() {
-  if (!Face.faces[0]) {
-    Face.nose = null;
+function updateNoses() {
+  if (Face.faces.length === 0) {
+    Face.noses = [];
     return;
   }
 
-  const point = Face.faces[0].keypoints[1];
   const stage = stageRect();
   const crop = cameraCrop();
-  Face.nose = {
-    x: stage.x + stage.w * (1 - (point.x - crop.x) / crop.w),
-    y: stage.y + stage.h * ((point.y - crop.y) / crop.h),
-  };
+  Face.noses = Face.faces.map((face) => {
+    const point = face.keypoints[1];
+    return {
+      x: stage.x + stage.w * (1 - (point.x - crop.x) / crop.w),
+      y: stage.y + stage.h * ((point.y - crop.y) / crop.h),
+    };
+  });
 }

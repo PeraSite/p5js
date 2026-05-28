@@ -25,7 +25,9 @@ function drawCameraSetupScreen() {
   });
 
   drawText(
-    Face.nose ? "얼굴 인식 완료" : "화면 중앙에 얼굴을 맞춰주세요",
+    Face.noses.length > 0
+      ? `얼굴 ${Face.noses.length}명 인식 완료`
+      : "화면 중앙에 얼굴을 맞춰주세요",
     stage.x + stage.w / 2,
     stage.y + stage.h * 0.62,
     { size: 18, alignH: CENTER, alignV: TOP },
@@ -37,7 +39,7 @@ function drawCameraSetupScreen() {
     stage.y + stage.h - 96,
     stage.w - 108,
     54,
-    !!Face.nose,
+    Face.noses.length > 0,
     () => {
       App.state = "howTo";
     },
