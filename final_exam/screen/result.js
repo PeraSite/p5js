@@ -31,11 +31,6 @@ function drawResultScreen() {
     alignH: LEFT,
     alignV: TOP,
   });
-  drawText("2조 정제훈 한채아", stage.x + stage.w / 2, stage.y + stage.h - 164, {
-    size: 14,
-    alignH: CENTER,
-    alignV: TOP,
-  });
 
   const buttonW = (stage.w - 76) / 2;
   drawButton(

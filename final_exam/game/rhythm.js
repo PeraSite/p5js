@@ -59,8 +59,13 @@ function updateNotes() {
       dist(Face.nose.x, Face.nose.y, pos.x, pos.y) <
         GAME_CONFIG.noseRadius + GAME_CONFIG.noteSize * 0.35;
 
-    if (touching && abs(delta) <= GAME_CONFIG.judgeWindows.at(-1).window) {
-      hitNote(note, delta);
+    if (touching) {
+      if (abs(delta) <= GAME_CONFIG.judgeWindows.at(-1).window) {
+        hitNote(note, delta);
+      } else {
+        playNoteSound(note);
+        missNote(note);
+      }
     } else if (delta > GAME_CONFIG.missAfter) {
       missNote(note);
     }
@@ -87,6 +92,15 @@ function hitNote(note, delta) {
   Play.score += result.score + Play.combo * 12;
   Play.judge = result.label;
   Play.judgeAt = millis();
+  playNoteSound(note);
+}
+
+/**
+ * 노트의 피아노 소리를 한 번 재생한다.
+ * @author 정제훈
+ * @param {object} note - Play.notes 항목
+ */
+function playNoteSound(note) {
   Audio.piano.triggerAttackRelease(
     note.note,
     note.duration,
