@@ -37,6 +37,40 @@ function topLeaderboardEntries(entries) {
   return entries.slice().sort(compareLeaderboardEntries).slice(0, LEADERBOARD_LIMIT);
 }
 
+function currentPlayLeaderboardEntry(score, accuracy) {
+  return {
+    id: "__current",
+    nickname: "",
+    score,
+    accuracy: Number(accuracy.toFixed(1)),
+    createdAt: Number.MAX_SAFE_INTEGER,
+    current: true,
+  };
+}
+
+function leaderboardEntryRank(entries, currentEntry) {
+  const ranked = leaderboardRankedEntries(entries, currentEntry);
+  return ranked.findIndex((entry) => entry.current) + 1;
+}
+
+function leaderboardRankedEntries(entries, currentEntry) {
+  return entries.concat(currentEntry).sort(compareLeaderboardEntries);
+}
+
+function liveLeaderboardRows(entries, currentEntry, limit = LEADERBOARD_LIMIT) {
+  const ranked = leaderboardRankedEntries(entries, currentEntry).map((entry, index) => ({
+    ...entry,
+    displayRank: index + 1,
+  }));
+  const currentIndex = ranked.findIndex((entry) => entry.current);
+  if (currentIndex < 0) return [];
+
+  const half = Math.floor(limit / 2);
+  const maxStart = Math.max(0, ranked.length - limit);
+  const start = Math.min(Math.max(currentIndex - half, 0), maxStart);
+  return ranked.slice(start, start + limit);
+}
+
 function createLeaderboardRecord(input) {
   return {
     nickname: input.nickname,

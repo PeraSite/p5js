@@ -26,6 +26,16 @@
       "difficulty": "HARD",
       "length": 14,
       "chart": "assets/charts/flea-waltz.json"
+    },
+    {
+      "id": "ditto",
+      "title": "Ditto",
+      "artist": "NewJeans",
+      "source": "Short game chart inspired by Ditto",
+      "difficulty": "NORMAL",
+      "length": 74,
+      "chart": "assets/charts/ditto.json",
+      "thumbnail": "assets/thumbnails/ditto.jpg"
     }
   ]
 }

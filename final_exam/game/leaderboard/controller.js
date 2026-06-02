@@ -21,25 +21,39 @@ function currentLeaderboardResultKey() {
 }
 
 function resetLeaderboardState(resultKey) {
+  const song = currentLeaderboardSong();
   Leaderboard.name = "";
   Leaderboard.submitted = false;
   Leaderboard.submitting = false;
   Leaderboard.loading = false;
   Leaderboard.preparedResultKey = resultKey;
-  Leaderboard.loadedSongId = "";
-  Leaderboard.entries = [];
+  Leaderboard.liveRank = null;
+  Leaderboard.liveRankFrom = null;
+  Leaderboard.liveRankChangedAt = 0;
+  if (!song || Leaderboard.loadedSongId !== song.id) {
+    Leaderboard.loadedSongId = "";
+    Leaderboard.loadFailedSongId = "";
+    Leaderboard.allEntries = [];
+    Leaderboard.entries = [];
+  }
 }
 
 async function loadCurrentLeaderboard(force) {
   const song = currentLeaderboardSong();
-  if (!song || (Leaderboard.loading && !force)) return;
+  if (!song) return;
+  if (Leaderboard.loading && !force) return;
+  if (Leaderboard.loadedSongId === song.id && !force) return;
+  if (Leaderboard.loadFailedSongId === song.id && !force) return;
 
   Leaderboard.loading = true;
   try {
     const entries = await FirebaseScores.fetchBySong(song.id);
+    Leaderboard.allEntries = entries;
     Leaderboard.entries = topLeaderboardEntries(entries);
     Leaderboard.loadedSongId = song.id;
+    Leaderboard.loadFailedSongId = "";
   } catch (error) {
+    Leaderboard.loadFailedSongId = song.id;
     console.warn("Leaderboard load failed", error);
   } finally {
     Leaderboard.loading = false;
@@ -52,8 +66,42 @@ function prepareLeaderboardForResult() {
 
   if (Leaderboard.preparedResultKey !== resultKey) {
     resetLeaderboardState(resultKey);
-    loadCurrentLeaderboard();
+    loadCurrentLeaderboard(true);
   }
+}
+
+function prepareLeaderboardForPlaying() {
+  const song = currentLeaderboardSong();
+  if (!song) return;
+  loadCurrentLeaderboard();
+}
+
+function currentLeaderboardLiveRank() {
+  const song = currentLeaderboardSong();
+  if (!song || Leaderboard.loadedSongId !== song.id) return null;
+
+  const currentEntry = currentPlayLeaderboardEntry(Play.score, playAccuracy());
+  const rank = leaderboardEntryRank(Leaderboard.allEntries, currentEntry);
+  updateLeaderboardLiveRank(rank);
+  return rank;
+}
+
+function currentLiveLeaderboardRows() {
+  const song = currentLeaderboardSong();
+  if (!song || Leaderboard.loadedSongId !== song.id) return [];
+
+  const currentEntry = currentPlayLeaderboardEntry(Play.score, playAccuracy());
+  const rank = leaderboardEntryRank(Leaderboard.allEntries, currentEntry);
+  updateLeaderboardLiveRank(rank);
+  return liveLeaderboardRows(Leaderboard.allEntries, currentEntry, 3);
+}
+
+function updateLeaderboardLiveRank(rank) {
+  if (Leaderboard.liveRank !== null && rank < Leaderboard.liveRank) {
+    Leaderboard.liveRankFrom = Leaderboard.liveRank;
+    Leaderboard.liveRankChangedAt = millis();
+  }
+  Leaderboard.liveRank = rank;
 }
 
 function buildCurrentLeaderboardRecord() {

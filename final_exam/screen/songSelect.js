@@ -13,9 +13,15 @@ function drawSongSelectScreen() {
     style: BOLD,
   });
 
-  const cardH = 76;
-  const gap = 14;
-  const top = stage.y + 104;
+  const gap = 8;
+  const top = stage.y + 82;
+  const bottomReserve = 104;
+  const availableH = stage.h - (top - stage.y) - bottomReserve;
+  const cardH = constrain(
+    (availableH - gap * (App.songs.length - 1)) / App.songs.length,
+    58,
+    76,
+  );
   for (let i = 0; i < App.songs.length; i += 1) {
     const song = App.songs[i];
     const x = stage.x + 28;
@@ -29,7 +35,8 @@ function drawSongSelectScreen() {
       cardH,
       i === App.selectedSong,
       song.title,
-      `${song.difficulty}  /  ${song.length}s`,
+      `${song.artist}  /  ${song.difficulty}  /  ${song.length}s`,
+      song.thumbnailImage,
       () => selectSong(index),
     );
   }

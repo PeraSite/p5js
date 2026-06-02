@@ -7,6 +7,7 @@ function preload() {
     App.songs = catalog.songs;
     for (const song of App.songs) {
       song.chartData = loadJSON(song.chart);
+      if (song.thumbnail) song.thumbnailImage = loadImage(song.thumbnail);
     }
   });
   Face.faceMesh = ml5.faceMesh({

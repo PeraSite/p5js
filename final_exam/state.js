@@ -63,5 +63,10 @@ const Leaderboard = {
   loading: false,
   preparedResultKey: "",
   loadedSongId: "",
+  loadFailedSongId: "",
+  allEntries: [],
   entries: [],
+  liveRank: null,
+  liveRankFrom: null,
+  liveRankChangedAt: 0,
 };
