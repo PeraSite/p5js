@@ -7,7 +7,8 @@
       "source": "Ah! vous dirai-je, maman / Twinkle Twinkle Little Star",
       "difficulty": "EASY",
       "length": 28,
-      "chart": "assets/charts/small-star.json"
+      "chart": "assets/charts/small-star.json",
+      "thumbnail": "assets/thumbnails/small-star.svg"
     },
     {
       "id": "butterfly",
@@ -16,7 +17,8 @@
       "source": "Hanschen klein",
       "difficulty": "NORMAL",
       "length": 17,
-      "chart": "assets/charts/butterfly.json"
+      "chart": "assets/charts/butterfly.json",
+      "thumbnail": "assets/thumbnails/butterfly.svg"
     },
     {
       "id": "flea-waltz",
@@ -25,17 +27,38 @@
       "source": "Der Flohwalzer",
       "difficulty": "HARD",
       "length": 14,
-      "chart": "assets/charts/flea-waltz.json"
+      "chart": "assets/charts/flea-waltz.json",
+      "thumbnail": "assets/thumbnails/flea-waltz.svg"
     },
     {
-      "id": "ditto",
-      "title": "Ditto",
-      "artist": "NewJeans",
-      "source": "Short game chart inspired by Ditto",
+      "id": "perfect-night",
+      "title": "Perfect Night",
+      "artist": "LE SSERAFIM",
+      "source": "Converted from MIDI melody guide",
       "difficulty": "NORMAL",
-      "length": 74,
-      "chart": "assets/charts/ditto.json",
-      "thumbnail": "assets/thumbnails/ditto.jpg"
+      "length": 45,
+      "chart": "assets/charts/perfect-night.json",
+      "thumbnail": "assets/thumbnails/perfect-night.jpg"
+    },
+    {
+      "id": "love-dive",
+      "title": "Love Dive",
+      "artist": "IVE",
+      "source": "Converted from MIDI melody guide",
+      "difficulty": "NORMAL",
+      "length": 46,
+      "chart": "assets/charts/love-dive.json",
+      "thumbnail": "assets/thumbnails/love-dive.jpg"
+    },
+    {
+      "id": "shutdown",
+      "title": "Shut Down",
+      "artist": "BLACKPINK",
+      "source": "Converted from MIDI melody guide",
+      "difficulty": "HARD",
+      "length": 42,
+      "chart": "assets/charts/shutdown.json",
+      "thumbnail": "assets/thumbnails/shutdown.jpg"
     }
   ]
 }

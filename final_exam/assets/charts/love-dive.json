@@ -1,0 +1,728 @@
+{
+  "title": "Love Dive",
+  "bpm": 118,
+  "source": "Love Dive IVE.mid",
+  "midiTrack": "track 5, channel 4, Melody Guide",
+  "notes": [
+    {
+      "time": 1200,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.145,
+      "drum": "kick"
+    },
+    {
+      "time": 1454,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.274
+    },
+    {
+      "time": 1963,
+      "x": 0.412,
+      "note": "D#4",
+      "midiPitch": 63,
+      "duration": 0.268,
+      "drum": "hihat"
+    },
+    {
+      "time": 2471,
+      "x": 0.471,
+      "note": "E4",
+      "midiPitch": 64,
+      "duration": 0.268
+    },
+    {
+      "time": 2980,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.252,
+      "drum": "snare"
+    },
+    {
+      "time": 3234,
+      "x": 0.235,
+      "note": "C4",
+      "midiPitch": 60,
+      "duration": 0.125
+    },
+    {
+      "time": 3488,
+      "x": 0.235,
+      "note": "C4",
+      "midiPitch": 60,
+      "duration": 0.252,
+      "drum": "hihat"
+    },
+    {
+      "time": 3997,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.252
+    },
+    {
+      "time": 4505,
+      "x": 0.412,
+      "note": "D#4",
+      "midiPitch": 63,
+      "duration": 0.252,
+      "drum": "kick"
+    },
+    {
+      "time": 5014,
+      "x": 0.0,
+      "note": "G#3",
+      "midiPitch": 56,
+      "duration": 0.252
+    },
+    {
+      "time": 5268,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.125,
+      "drum": "hihat"
+    },
+    {
+      "time": 5522,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.252
+    },
+    {
+      "time": 6030,
+      "x": 0.412,
+      "note": "D#4",
+      "midiPitch": 63,
+      "duration": 0.252,
+      "drum": "snare"
+    },
+    {
+      "time": 6539,
+      "x": 0.471,
+      "note": "E4",
+      "midiPitch": 64,
+      "duration": 0.252
+    },
+    {
+      "time": 7047,
+      "x": 0.235,
+      "note": "C4",
+      "midiPitch": 60,
+      "duration": 0.252,
+      "drum": "hihat"
+    },
+    {
+      "time": 8319,
+      "x": 0.706,
+      "note": "G#4",
+      "midiPitch": 68,
+      "duration": 0.252
+    },
+    {
+      "time": 8573,
+      "x": 0.588,
+      "note": "F#4",
+      "midiPitch": 66,
+      "duration": 0.252,
+      "drum": "kick"
+    },
+    {
+      "time": 8827,
+      "x": 0.471,
+      "note": "E4",
+      "midiPitch": 64,
+      "duration": 0.252
+    },
+    {
+      "time": 9081,
+      "x": 0.412,
+      "note": "D#4",
+      "midiPitch": 63,
+      "duration": 0.252,
+      "drum": "hihat"
+    },
+    {
+      "time": 9336,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.145
+    },
+    {
+      "time": 9590,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.274,
+      "drum": "snare"
+    },
+    {
+      "time": 10098,
+      "x": 0.412,
+      "note": "D#4",
+      "midiPitch": 63,
+      "duration": 0.268
+    },
+    {
+      "time": 10607,
+      "x": 0.471,
+      "note": "E4",
+      "midiPitch": 64,
+      "duration": 0.268,
+      "drum": "hihat"
+    },
+    {
+      "time": 11115,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.252
+    },
+    {
+      "time": 11369,
+      "x": 0.235,
+      "note": "C4",
+      "midiPitch": 60,
+      "duration": 0.125,
+      "drum": "kick"
+    },
+    {
+      "time": 11624,
+      "x": 0.235,
+      "note": "C4",
+      "midiPitch": 60,
+      "duration": 0.252
+    },
+    {
+      "time": 12132,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.252,
+      "drum": "hihat"
+    },
+    {
+      "time": 12641,
+      "x": 0.412,
+      "note": "D#4",
+      "midiPitch": 63,
+      "duration": 0.252
+    },
+    {
+      "time": 12895,
+      "x": 0.0,
+      "note": "G#3",
+      "midiPitch": 56,
+      "duration": 0.506,
+      "drum": "snare"
+    },
+    {
+      "time": 13403,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.151
+    },
+    {
+      "time": 13658,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.06,
+      "drum": "hihat"
+    },
+    {
+      "time": 13785,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.242
+    },
+    {
+      "time": 14166,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.133,
+      "drum": "kick"
+    },
+    {
+      "time": 14420,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.164
+    },
+    {
+      "time": 14675,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.06,
+      "drum": "hihat"
+    },
+    {
+      "time": 14802,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.279
+    },
+    {
+      "time": 15437,
+      "x": 0.706,
+      "note": "G#4",
+      "midiPitch": 68,
+      "duration": 0.125,
+      "drum": "snare"
+    },
+    {
+      "time": 15691,
+      "x": 0.588,
+      "note": "F#4",
+      "midiPitch": 66,
+      "duration": 0.252
+    },
+    {
+      "time": 16200,
+      "x": 0.471,
+      "note": "E4",
+      "midiPitch": 64,
+      "duration": 0.252,
+      "drum": "hihat"
+    },
+    {
+      "time": 16454,
+      "x": 0.412,
+      "note": "D#4",
+      "midiPitch": 63,
+      "duration": 0.379
+    },
+    {
+      "time": 16963,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.252,
+      "drum": "kick"
+    },
+    {
+      "time": 20268,
+      "x": 0.588,
+      "note": "F#4",
+      "midiPitch": 66,
+      "duration": 0.061
+    },
+    {
+      "time": 20395,
+      "x": 0.588,
+      "note": "F#4",
+      "midiPitch": 66,
+      "duration": 0.061,
+      "drum": "hihat"
+    },
+    {
+      "time": 20522,
+      "x": 0.588,
+      "note": "F#4",
+      "midiPitch": 66,
+      "duration": 0.189
+    },
+    {
+      "time": 20776,
+      "x": 0.471,
+      "note": "E4",
+      "midiPitch": 64,
+      "duration": 0.252,
+      "drum": "snare"
+    },
+    {
+      "time": 21030,
+      "x": 0.412,
+      "note": "D#4",
+      "midiPitch": 63,
+      "duration": 0.252
+    },
+    {
+      "time": 21285,
+      "x": 0.471,
+      "note": "E4",
+      "midiPitch": 64,
+      "duration": 0.125,
+      "drum": "hihat"
+    },
+    {
+      "time": 21412,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.125
+    },
+    {
+      "time": 24336,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.252,
+      "drum": "kick"
+    },
+    {
+      "time": 24590,
+      "x": 0.706,
+      "note": "G#4",
+      "midiPitch": 68,
+      "duration": 0.252
+    },
+    {
+      "time": 24844,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.252,
+      "drum": "hihat"
+    },
+    {
+      "time": 25098,
+      "x": 0.706,
+      "note": "G#4",
+      "midiPitch": 68,
+      "duration": 0.252
+    },
+    {
+      "time": 25352,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.252,
+      "drum": "snare"
+    },
+    {
+      "time": 25607,
+      "x": 0.471,
+      "note": "E4",
+      "midiPitch": 64,
+      "duration": 0.252
+    },
+    {
+      "time": 25861,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.252,
+      "drum": "hihat"
+    },
+    {
+      "time": 27895,
+      "x": 0.882,
+      "note": "B4",
+      "midiPitch": 71,
+      "duration": 0.125
+    },
+    {
+      "time": 28149,
+      "x": 0.882,
+      "note": "B4",
+      "midiPitch": 71,
+      "duration": 0.125,
+      "drum": "kick"
+    },
+    {
+      "time": 28403,
+      "x": 0.706,
+      "note": "G#4",
+      "midiPitch": 68,
+      "duration": 0.125
+    },
+    {
+      "time": 28658,
+      "x": 0.882,
+      "note": "B4",
+      "midiPitch": 71,
+      "duration": 0.125,
+      "drum": "hihat"
+    },
+    {
+      "time": 28912,
+      "x": 1.0,
+      "note": "C#5",
+      "midiPitch": 73,
+      "duration": 0.125
+    },
+    {
+      "time": 29166,
+      "x": 1.0,
+      "note": "C#5",
+      "midiPitch": 73,
+      "duration": 0.506,
+      "drum": "snare"
+    },
+    {
+      "time": 30437,
+      "x": 0.882,
+      "note": "B4",
+      "midiPitch": 71,
+      "duration": 0.252
+    },
+    {
+      "time": 30691,
+      "x": 0.706,
+      "note": "G#4",
+      "midiPitch": 68,
+      "duration": 0.379,
+      "drum": "hihat"
+    },
+    {
+      "time": 31708,
+      "x": 0.706,
+      "note": "G#4",
+      "midiPitch": 68,
+      "duration": 0.252
+    },
+    {
+      "time": 31963,
+      "x": 0.588,
+      "note": "F#4",
+      "midiPitch": 66,
+      "duration": 0.252,
+      "drum": "kick"
+    },
+    {
+      "time": 32471,
+      "x": 0.471,
+      "note": "E4",
+      "midiPitch": 64,
+      "duration": 0.252
+    },
+    {
+      "time": 32725,
+      "x": 0.412,
+      "note": "D#4",
+      "midiPitch": 63,
+      "duration": 0.506,
+      "drum": "hihat"
+    },
+    {
+      "time": 33234,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.506
+    },
+    {
+      "time": 36030,
+      "x": 0.0,
+      "note": "G#3",
+      "midiPitch": 56,
+      "duration": 0.252,
+      "drum": "snare"
+    },
+    {
+      "time": 36285,
+      "x": 0.471,
+      "note": "E4",
+      "midiPitch": 64,
+      "duration": 0.252
+    },
+    {
+      "time": 36539,
+      "x": 0.412,
+      "note": "D#4",
+      "midiPitch": 63,
+      "duration": 0.252,
+      "drum": "hihat"
+    },
+    {
+      "time": 36793,
+      "x": 0.471,
+      "note": "E4",
+      "midiPitch": 64,
+      "duration": 0.252
+    },
+    {
+      "time": 37047,
+      "x": 0.412,
+      "note": "D#4",
+      "midiPitch": 63,
+      "duration": 0.252,
+      "drum": "kick"
+    },
+    {
+      "time": 37302,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.252
+    },
+    {
+      "time": 37810,
+      "x": 0.235,
+      "note": "C4",
+      "midiPitch": 60,
+      "duration": 0.252,
+      "drum": "hihat"
+    },
+    {
+      "time": 38064,
+      "x": 0.118,
+      "note": "A#3",
+      "midiPitch": 58,
+      "duration": 0.252
+    },
+    {
+      "time": 38319,
+      "x": 0.235,
+      "note": "C4",
+      "midiPitch": 60,
+      "duration": 0.252,
+      "drum": "snare"
+    },
+    {
+      "time": 38573,
+      "x": 0.118,
+      "note": "A#3",
+      "midiPitch": 58,
+      "duration": 0.252
+    },
+    {
+      "time": 38827,
+      "x": 0.235,
+      "note": "C4",
+      "midiPitch": 60,
+      "duration": 0.252,
+      "drum": "hihat"
+    },
+    {
+      "time": 39081,
+      "x": 0.118,
+      "note": "A#3",
+      "midiPitch": 58,
+      "duration": 0.252
+    },
+    {
+      "time": 39335,
+      "x": 0.0,
+      "note": "G#3",
+      "midiPitch": 56,
+      "duration": 0.252,
+      "drum": "kick"
+    },
+    {
+      "time": 39590,
+      "x": 0.0,
+      "note": "G#3",
+      "midiPitch": 56,
+      "duration": 0.252
+    },
+    {
+      "time": 40098,
+      "x": 0.0,
+      "note": "G#3",
+      "midiPitch": 56,
+      "duration": 0.252,
+      "drum": "hihat"
+    },
+    {
+      "time": 40352,
+      "x": 0.471,
+      "note": "E4",
+      "midiPitch": 64,
+      "duration": 0.252
+    },
+    {
+      "time": 40607,
+      "x": 0.412,
+      "note": "D#4",
+      "midiPitch": 63,
+      "duration": 0.252,
+      "drum": "snare"
+    },
+    {
+      "time": 40861,
+      "x": 0.471,
+      "note": "E4",
+      "midiPitch": 64,
+      "duration": 0.252
+    },
+    {
+      "time": 41115,
+      "x": 0.412,
+      "note": "D#4",
+      "midiPitch": 63,
+      "duration": 0.252,
+      "drum": "hihat"
+    },
+    {
+      "time": 41369,
+      "x": 0.294,
+      "note": "C#4",
+      "midiPitch": 61,
+      "duration": 0.252
+    },
+    {
+      "time": 41878,
+      "x": 0.235,
+      "note": "C4",
+      "midiPitch": 60,
+      "duration": 0.252,
+      "drum": "kick"
+    },
+    {
+      "time": 42132,
+      "x": 0.118,
+      "note": "A#3",
+      "midiPitch": 58,
+      "duration": 0.252
+    },
+    {
+      "time": 42386,
+      "x": 0.235,
+      "note": "C4",
+      "midiPitch": 60,
+      "duration": 0.252,
+      "drum": "hihat"
+    },
+    {
+      "time": 42641,
+      "x": 0.118,
+      "note": "A#3",
+      "midiPitch": 58,
+      "duration": 0.252
+    },
+    {
+      "time": 42895,
+      "x": 0.235,
+      "note": "C4",
+      "midiPitch": 60,
+      "duration": 0.252,
+      "drum": "snare"
+    },
+    {
+      "time": 43149,
+      "x": 0.118,
+      "note": "A#3",
+      "midiPitch": 58,
+      "duration": 0.252
+    },
+    {
+      "time": 43403,
+      "x": 0.0,
+      "note": "G#3",
+      "midiPitch": 56,
+      "duration": 0.252,
+      "drum": "hihat"
+    },
+    {
+      "time": 43657,
+      "x": 0.0,
+      "note": "G#3",
+      "midiPitch": 56,
+      "duration": 0.252
+    }
+  ]
+}
