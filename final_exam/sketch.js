@@ -75,6 +75,7 @@ function windowResized() {
  * @returns {false} p5 기본 키 동작 방지
  */
 function keyPressed() {
+  if (handleLeaderboardKey()) return false;
   if (key === " " && App.state === "howTo") startGame();
   if (keyCode === ENTER && App.state === "main") App.state = "songSelect";
   if (keyCode === ENTER && App.state === "songSelect") {

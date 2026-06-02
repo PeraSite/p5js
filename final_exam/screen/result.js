@@ -7,6 +7,7 @@ function drawResultScreen() {
   const stage = stageRect();
   const accuracy = playAccuracy();
   const rank = playRank();
+  prepareLeaderboardForResult();
 
   drawText("RESULT", stage.x + stage.w / 2, stage.y + 36, {
     size: 28,
@@ -31,6 +32,49 @@ function drawResultScreen() {
     alignH: LEFT,
     alignV: TOP,
   });
+
+  const boardY = y + 154;
+  drawText("NAME", x, boardY, { size: 14, alignH: LEFT, alignV: TOP });
+  drawText(leaderboardNameDisplay(Leaderboard.name), x + 82, boardY, {
+    size: 18,
+    alignH: LEFT,
+    alignV: TOP,
+    style: BOLD,
+  });
+
+  drawButton(
+    Leaderboard.submitted ? "SAVED" : "SUBMIT",
+    stage.x + stage.w - 152,
+    boardY - 10,
+    124,
+    38,
+    canSubmitLeaderboardScore(),
+    () => submitCurrentLeaderboardScore(),
+  );
+
+  const listY = boardY + 46;
+  drawText("TOP 5", x, listY, {
+    size: 14,
+    alignH: LEFT,
+    alignV: TOP,
+    style: BOLD,
+  });
+
+  if (Leaderboard.loading && Leaderboard.entries.length === 0) {
+    drawText("LOADING", x, listY + 28, { size: 13, alignH: LEFT, alignV: TOP });
+  } else if (Leaderboard.entries.length === 0) {
+    drawText("NO RECORDS", x, listY + 28, { size: 13, alignH: LEFT, alignV: TOP });
+  } else {
+    for (let i = 0; i < Leaderboard.entries.length; i += 1) {
+      const entry = Leaderboard.entries[i];
+      drawText(
+        `${i + 1}. ${entry.nickname}  ${entry.score}  ${Number(entry.accuracy).toFixed(1)}%`,
+        x,
+        listY + 28 + i * 22,
+        { size: 13, alignH: LEFT, alignV: TOP },
+      );
+    }
+  }
 
   const buttonW = (stage.w - 76) / 2;
   drawButton(

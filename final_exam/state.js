@@ -46,3 +46,17 @@ const Audio = {
   piano: null,
   pianoReady: false,
 };
+
+/**
+ * 온라인 리더보드: 결과 화면 입력·제출·표시 상태.
+ * @author 정제훈
+ */
+const Leaderboard = {
+  name: "",
+  submitted: false,
+  submitting: false,
+  loading: false,
+  preparedResultKey: "",
+  loadedSongId: "",
+  entries: [],
+};

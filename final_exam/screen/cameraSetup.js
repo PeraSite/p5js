@@ -15,15 +15,6 @@ function drawCameraSetupScreen() {
     style: BOLD,
   });
 
-  const guideW = stage.w * 0.54;
-  const guideH = stage.h * 0.32;
-  drawBox(stage.x + (stage.w - guideW) / 2, stage.y + stage.h * 0.22, guideW, guideH, {
-    fill: false,
-    stroke: 255,
-    strokeWeight: 2,
-    radius: 10,
-  });
-
   drawText(
     Face.noses.length > 0
       ? `얼굴 ${Face.noses.length}명 인식 완료`
