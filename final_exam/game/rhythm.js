@@ -32,7 +32,7 @@ async function startGame() {
     App.state = "cameraSetup";
     return;
   }
-  if (!Audio.pianoReady) {
+  if (!Audio.pianoReady || !Audio.drumsReady) {
     Play.judge = "LOADING SOUND";
     Play.judgeAt = millis();
     return;
@@ -77,7 +77,7 @@ function updateNotes() {
 }
 
 /**
- * 타이밍에 맞춘 노트를 처리하고 점수·콤보·판정·피아노 소리를 반영한다.
+ * 타이밍에 맞춘 노트를 처리하고 점수·콤보·판정·소리를 반영한다.
  * @author 정제훈
  * @param {object} note - Play.notes 항목
  * @param {number} delta - gameTime - note.time (ms)
@@ -97,17 +97,22 @@ function hitNote(note, delta) {
 }
 
 /**
- * 노트의 피아노 소리를 한 번 재생한다.
+ * 채보 노트에 지정된 피아노·드럼 소리를 한 번 재생한다.
  * @author 정제훈
  * @param {object} note - Play.notes 항목
  */
 function playNoteSound(note) {
-  Audio.piano.triggerAttackRelease(
-    note.note,
-    note.duration,
-    Tone.immediate(),
-    0.9,
-  );
+  if (note.note) {
+    Audio.piano.triggerAttackRelease(
+      note.note,
+      note.duration ?? GAME_CONFIG.defaultNoteDuration,
+      Tone.immediate(),
+      0.9,
+    );
+  }
+  if (note.drum && GAME_CONFIG.noteColors[note.drum]) {
+    Audio.drums.player(note.drum).start(Tone.immediate());
+  }
 }
 
 /**

@@ -39,12 +39,14 @@ const Face = {
 };
 
 /**
- * 오디오: Tone 피아노 샘플러.
+ * 오디오: Tone 피아노 샘플러와 드럼 샘플러.
  * @author 정제훈
  */
 const Audio = {
   piano: null,
   pianoReady: false,
+  drums: null,
+  drumsReady: false,
 };
 
 /**

@@ -22,6 +22,7 @@ function drawPlayfield() {
       alignH: CENTER,
       alignV: CENTER,
       style: BOLD,
+      fill: noteColor(note),
     });
   }
 
@@ -34,4 +35,17 @@ function drawPlayfield() {
     fill(255);
     circle(nose.x, nose.y, 7);
   }
+}
+
+/**
+ * 드럼이 있으면 드럼 색을 우선하고, 아니면 피아노 색을 반환한다.
+ * @author 정제훈
+ * @param {object} note - Play.notes 항목
+ * @returns {number[]} p5 fill 색상
+ */
+function noteColor(note) {
+  if (note.drum && GAME_CONFIG.noteColors[note.drum]) {
+    return GAME_CONFIG.noteColors[note.drum];
+  }
+  return GAME_CONFIG.noteColors.piano;
 }

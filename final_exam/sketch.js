@@ -25,6 +25,7 @@ function setup() {
   createCanvas(windowWidth, windowHeight);
   textFont("Arial");
   setupPiano();
+  setupDrums();
   setupCamera();
   App.selectedSong = 0;
   App.state = "main";

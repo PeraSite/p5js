@@ -44,5 +44,24 @@ function setupPiano() {
       Audio.pianoReady = true;
     },
   }).toDestination();
-  Audio.piano.volume.value = -5;
+  Audio.piano.volume.value = GAME_CONFIG.audioVolumes.piano;
+}
+
+/**
+ * Tone.js 드럼 샘플러를 생성하고 Audio.drums에 연결한다.
+ * @author 정제훈
+ * 로드 완료 시 Audio.drumsReady = true
+ */
+function setupDrums() {
+  Audio.drums = new Tone.Players(
+    {
+      kick: "assets/drum_sample/kick.mp3",
+      snare: "assets/drum_sample/snare.mp3",
+      hihat: "assets/drum_sample/hihat.mp3",
+    },
+    () => {
+      Audio.drumsReady = true;
+    },
+  ).toDestination();
+  Audio.drums.volume.value = GAME_CONFIG.audioVolumes.drums;
 }
