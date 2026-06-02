@@ -25,6 +25,9 @@ const Play = {
   misses: 0,
   judge: "",
   judgeAt: 0,
+  hitEffects: [],
+  shakeAt: 0,
+  shakePower: 0,
 };
 
 /**

@@ -18,6 +18,9 @@ function resetGame() {
   Play.hits = 0;
   Play.misses = 0;
   Play.judge = "";
+  Play.hitEffects = [];
+  Play.shakeAt = 0;
+  Play.shakePower = 0;
 }
 
 /**
@@ -93,7 +96,49 @@ function hitNote(note, delta) {
   Play.score += result.score + Play.combo * 12;
   Play.judge = result.label;
   Play.judgeAt = millis();
+  addHitEffect(note, result.label);
   playNoteSound(note);
+}
+
+/**
+ * 히트·미스 순간의 좌표와 강도를 저장해 짧은 타격 이펙트로 사용한다.
+ * @author 정제훈
+ * @param {object} note - Play.notes 항목
+ * @param {string} label - 판정 라벨
+ */
+function addHitEffect(note, label) {
+  const pos = notePosition(note);
+  const comboBoost = Play.combo >= 10 ? constrain(Play.combo / 50, 0.12, 0.35) : 0;
+  const levels = {
+    EXCELLENT: { power: 1.25, shake: 4, duration: 360 },
+    GREAT: { power: 1, shake: 3, duration: 320 },
+    GOOD: { power: 0.72, shake: 1.8, duration: 280 },
+    BAD: { power: 0.48, shake: 1.2, duration: 240 },
+    MISS: { power: 0.38, shake: 0, duration: 220 },
+  };
+  const level = levels[label] ?? levels.GOOD;
+  const color =
+    label === "MISS"
+      ? [255, 72, 86]
+      : note.drum && GAME_CONFIG.noteColors[note.drum]
+        ? GAME_CONFIG.noteColors[note.drum]
+        : GAME_CONFIG.noteColors.piano;
+
+  Play.hitEffects.push({
+    x: pos.x,
+    y: pos.y,
+    at: millis(),
+    label,
+    color,
+    power: level.power + comboBoost,
+    duration: level.duration,
+  });
+  if (Play.hitEffects.length > 24) Play.hitEffects.shift();
+
+  if (level.shake > 0) {
+    Play.shakeAt = millis();
+    Play.shakePower = level.shake + comboBoost * 3;
+  }
 }
 
 /**
@@ -126,6 +171,7 @@ function missNote(note) {
   Play.combo = 0;
   Play.judge = "MISS";
   Play.judgeAt = millis();
+  addHitEffect(note, "MISS");
 }
 
 /**
