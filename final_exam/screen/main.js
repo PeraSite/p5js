@@ -3,25 +3,28 @@
  * @author 한채아
  */
 function drawMainScreen() {
-  background(0);
   const stage = stageRect();
+  drawUiBackground(stage, { dim: 30 });
 
-  drawText("mellow\nbeat", stage.x + stage.w / 2, stage.y + stage.h * 0.32, {
-    size: 48,
-    alignH: CENTER,
-    alignV: CENTER,
-  });
-  drawText("2조 정제훈 한채아", stage.x + stage.w / 2, stage.y + stage.h * 0.6, {
+  drawImageContain(
+    App.assets.ui.logo,
+    stage.x + stage.w * 0.14,
+    stage.y + stage.h * 0.04,
+    stage.w * 0.72,
+    stage.h * 0.5,
+  );
+
+  drawText("2조 정제훈 한채아", stage.x + stage.w / 2, stage.y + stage.h * 0.58, {
     size: 16,
     alignH: CENTER,
     alignV: CENTER,
-    fill: [255, 226, 168],
+    fill: CAMP.creamDim,
   });
 
   drawButton(
-    "START",
+    "ROAST!",
     stage.x + 54,
-    stage.y + stage.h - 116,
+    stage.y + stage.h - 124,
     stage.w - 108,
     54,
     true,

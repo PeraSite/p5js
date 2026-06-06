@@ -12,13 +12,10 @@
  * @param {() => void} onClick - 클릭 시 실행 함수
  */
 function drawSelectableCard(x, y, w, h, selected, title, subtitle, thumbnail, onClick) {
-  const textFill = selected ? 0 : 255;
-  drawBox(x, y, w, h, {
-    fill: selected ? 255 : 0,
-    stroke: 255,
-    strokeWeight: 1.5,
-    radius: 6,
-  });
+  const textFill = selected ? CAMP.ink : CAMP.cream;
+  if (selected) drawCreamPanel(x, y, w, h, { selected: true });
+  else drawWoodPanel(x, y, w, h, { fillColor: [104, 62, 39], radius: 7 });
+
   const thumbSize = max(42, h - 14);
   const thumbX = x + 8;
   const thumbY = y + (h - thumbSize) / 2;
@@ -36,7 +33,7 @@ function drawSelectableCard(x, y, w, h, selected, title, subtitle, thumbnail, on
     alignH: LEFT,
     alignV: TOP,
     size: h < 66 ? 10 : 12,
-    fill: textFill,
+    fill: selected ? [112, 67, 38] : CAMP.creamDim,
   });
   registerButton(x, y, w, h, true, onClick);
 }
@@ -60,15 +57,15 @@ function drawThumbnail(thumbnail, x, y, size, selected) {
     image(thumbnail, x, y, size, size, sx, sy, sw, sh);
   } else {
     drawBox(x, y, size, size, {
-      fill: selected ? 0 : 255,
-      stroke: selected ? 0 : 255,
+      fill: selected ? CAMP.toast : CAMP.cream,
+      stroke: CAMP.woodDark,
       strokeWeight: 1,
       radius: 4,
     });
   }
   noFill();
-  stroke(selected ? 0 : 255);
-  strokeWeight(1.5);
+  stroke(selected ? CAMP.woodDark : CAMP.creamDim);
+  strokeWeight(2);
   rect(x, y, size, size, 4);
   pop();
 }

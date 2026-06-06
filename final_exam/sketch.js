@@ -5,6 +5,7 @@
 function preload() {
   App.font = loadFont(GAME_CONFIG.fontPath);
   loadMellowAssets();
+  loadUiAssets();
   loadJSON(GAME_CONFIG.songsPath, (catalog) => {
     App.songs = catalog.songs;
     for (const song of App.songs) {
@@ -40,6 +41,13 @@ function loadMellowAssets() {
       burnt: loadImage(`${base}/marshmallow-burnt.png`),
     },
   };
+}
+
+function loadUiAssets() {
+  const base = GAME_CONFIG.uiAssetsPath;
+  App.assets.ui.background = loadImage(`${base}/bg-camp.png`);
+  App.assets.ui.panelCream = loadImage(`${base}/panel-cream.png`);
+  App.assets.ui.logo = loadImage(`${base}/logo-title.png`);
 }
 
 /**

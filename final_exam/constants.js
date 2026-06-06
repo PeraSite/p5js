@@ -6,6 +6,7 @@ const GAME_CONFIG = {
   songsPath: "assets/songs.json",
   fontPath: "assets/fonts/Dalmoori.ttf",
   mellowAssetsPath: "assets/mellow",
+  uiAssetsPath: "assets/ui",
   cameraWidth: 360,
   cameraHeight: 640,
   stageRatio: 9 / 16,

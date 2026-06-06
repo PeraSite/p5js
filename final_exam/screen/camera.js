@@ -25,6 +25,4 @@ function drawCamera() {
   );
   drawingContext.restore();
   pop();
-
-  drawBox(stage.x, stage.y, stage.w, stage.h, { fill: [0, 0, 0, 112] });
 }

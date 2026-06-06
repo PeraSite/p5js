@@ -3,33 +3,50 @@
  * @author 한채아
  */
 function drawHowToScreen() {
-  background(0);
+  drawCamera();
   const stage = stageRect();
+  drawBox(stage.x, stage.y, stage.w, stage.h, { fill: [16, 10, 14, 120] });
 
-  drawText("HOW TO ROAST", stage.x + stage.w / 2, stage.y + 50, {
-    size: 28,
+  const panelX = stage.x + 28;
+  const panelY = stage.y + 84;
+  const panelW = stage.w - 56;
+  drawCreamAssetPanel(panelX, panelY, panelW, 342);
+  drawText("HOW TO ROAST", stage.x + stage.w / 2, panelY + 44, {
+    size: 23,
     alignH: CENTER,
-    alignV: TOP,
+    alignV: CENTER,
     style: BOLD,
+    fill: CAMP.ink,
   });
-
-  const x = stage.x + 42;
-  const y = stage.y + 150;
-  drawText("1. 마시멜로가 아래로 떨어집니다", x, y, { size: 17, alignH: LEFT, alignV: TOP });
-  drawText("2. 코로 꼬치 끝을 움직이세요", x, y + 54, { size: 17, alignH: LEFT, alignV: TOP });
+  const x = panelX + 24;
+  const y = panelY + 92;
+  drawText("1. 마시멜로가 아래로 떨어집니다", x, y, {
+    size: 16,
+    alignH: LEFT,
+    alignV: TOP,
+    fill: CAMP.ink,
+  });
+  drawText("2. 코로 꼬치 끝을 움직이세요", x, y + 54, {
+    size: 16,
+    alignH: LEFT,
+    alignV: TOP,
+    fill: CAMP.ink,
+  });
   drawText("3. 노릇해진 순간 끝으로 찌르세요", x, y + 108, {
     size: 17,
     alignH: LEFT,
     alignV: TOP,
+    fill: CAMP.ink,
   });
   drawText("4. 옆면, 안익음, 탄 뒤는 실패입니다", x, y + 162, {
-    size: 17,
+    size: 16,
     alignH: LEFT,
     alignV: TOP,
+    fill: CAMP.ink,
   });
 
   drawButton(
-    "PLAY",
+    "ROAST!",
     stage.x + 54,
     stage.y + stage.h - 96,
     stage.w - 108,

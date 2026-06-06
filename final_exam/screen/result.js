@@ -85,22 +85,12 @@ function resultBadgeText(accuracy) {
  * @param {object} theme - 랭크 테마
  */
 function drawResultBackdrop(stage, theme) {
-  background(5, 6, 8);
-  noStroke();
-  for (let i = 0; i < 28; i += 1) {
-    const t = i / 27;
-    const y = stage.y + stage.h * t;
-    const shade = lerpColor(color(8, 9, 13), color(theme.dim), 1 - t);
-    fill(red(shade), green(shade), blue(shade), 220);
-    rect(stage.x, y, stage.w, stage.h / 27 + 1);
-  }
-
-  fill(theme.accent[0], theme.accent[1], theme.accent[2], 12);
-  circle(stage.x + stage.w / 2, stage.y + stage.h * 0.24, stage.w * 1.18);
-  fill(255, 255, 255, 8);
-  rect(stage.x + 24, stage.y + 92, stage.w - 48, 1);
-  rect(stage.x + 24, stage.y + stage.h - 124, stage.w - 48, 1);
-
+  drawUiBackground(stage, { dim: 62 });
+  drawCreamAssetPanel(stage.x + 24, stage.y + 76, stage.w - 48, stage.h - 166, {
+    alpha: 244,
+  });
+  fill(theme.accent[0], theme.accent[1], theme.accent[2], 22);
+  circle(stage.x + stage.w / 2, stage.y + stage.h * 0.25, stage.w * 0.86);
   drawResultMarks(stage, theme);
 }
 
@@ -142,26 +132,30 @@ function drawResultRank(stage, rank, theme) {
   const cx = stage.x + stage.w / 2;
   const cy = stage.y + 160;
 
+  drawBox(cx - 82, cy - 46, 164, 154, {
+    fill: [255, 237, 197, 164],
+    stroke: theme.accent,
+    strokeWeight: 3,
+    radius: 8,
+  });
   noFill();
-  stroke(theme.accent[0], theme.accent[1], theme.accent[2], 42);
-  strokeWeight(2);
-  circle(cx, cy + 14, 126);
-  stroke(255, 255, 255, 18);
-  circle(cx, cy + 14, 154);
+  stroke(theme.accent[0], theme.accent[1], theme.accent[2], 90);
+  strokeWeight(3);
+  rect(cx - 70, cy - 34, 140, 130, 8);
 
   drawText(rank, cx, cy - 48, {
     size: 112,
     alignH: CENTER,
     alignV: TOP,
     style: BOLD,
-    fill: theme.accent,
+    fill: theme.dim,
   });
   drawText(theme.title, cx, cy + 78, {
     size: 16,
     alignH: CENTER,
     alignV: TOP,
     style: BOLD,
-    fill: [245, 245, 245],
+    fill: CAMP.ink,
   });
 }
 
@@ -178,10 +172,10 @@ function drawResultStats(stage, accuracy) {
     ["BEST STREAK", String(Play.maxCombo)],
     ["ROAST / BURN", `${Play.hits} / ${Play.misses}`],
   ];
-  const x = stage.x + 28;
+  const x = stage.x + 42;
   const y = stage.y + 276;
   const gap = 10;
-  const cellW = (stage.w - 56 - gap) / 2;
+  const cellW = (stage.w - 84 - gap) / 2;
   const cellH = 56;
 
   for (let i = 0; i < stats.length; i += 1) {
@@ -190,24 +184,19 @@ function drawResultStats(stage, accuracy) {
     const cellX = x + col * (cellW + gap);
     const cellY = y + row * (cellH + gap);
 
-    drawBox(cellX, cellY, cellW, cellH, {
-      fill: [255, 255, 255, 16],
-      stroke: [255, 255, 255, 32],
-      strokeWeight: 1,
-      radius: 6,
-    });
+    drawWoodPanel(cellX, cellY, cellW, cellH, { fillColor: [99, 57, 37], radius: 6 });
     drawText(stats[i][0], cellX + 12, cellY + 9, {
       size: 10,
       alignH: LEFT,
       alignV: TOP,
-      fill: [180, 184, 192],
+      fill: CAMP.creamDim,
     });
     drawText(stats[i][1], cellX + 12, cellY + 28, {
       size: 18,
       alignH: LEFT,
       alignV: TOP,
       style: BOLD,
-      fill: [250, 250, 250],
+      fill: CAMP.cream,
     });
   }
 }
@@ -218,7 +207,7 @@ function drawResultStats(stage, accuracy) {
  * @param {{ x: number, y: number, w: number, h: number }} stage - 스테이지 영역
  */
 function drawResultLeaderboard(stage) {
-  const x = stage.x + 32;
+  const x = stage.x + 44;
   const y = stage.y + 430;
 
   drawText("LEADERBOARD", x, y, {
@@ -226,26 +215,26 @@ function drawResultLeaderboard(stage) {
     alignH: LEFT,
     alignV: TOP,
     style: BOLD,
-    fill: [238, 238, 238],
+    fill: CAMP.cream,
   });
 
   drawText("NAME", x, y + 28, {
     size: 10,
     alignH: LEFT,
     alignV: TOP,
-    fill: [160, 164, 172],
+    fill: CAMP.creamDim,
   });
   drawText(leaderboardNameDisplay(Leaderboard.name), x + 52, y + 24, {
     size: 16,
     alignH: LEFT,
     alignV: TOP,
     style: BOLD,
-    fill: [255, 255, 255],
+    fill: CAMP.cream,
   });
 
   drawResultSmallButton(
     Leaderboard.submitted ? "SAVED" : "SUBMIT",
-    stage.x + stage.w - 122,
+    stage.x + stage.w - 132,
     y + 16,
     90,
     34,
@@ -267,13 +256,13 @@ function drawResultLeaderboard(stage) {
         size: 12,
         alignH: LEFT,
         alignV: TOP,
-        fill: [220, 222, 228],
+        fill: CAMP.creamDim,
       });
       drawText(
         `${entry.score}  ${Number(entry.accuracy).toFixed(1)}%`,
-        stage.x + stage.w - 32,
+        stage.x + stage.w - 44,
         rowY,
-        { size: 12, alignH: RIGHT, alignV: TOP, fill: [220, 222, 228] },
+        { size: 12, alignH: RIGHT, alignV: TOP, fill: CAMP.creamDim },
       );
     }
   }
@@ -331,24 +320,17 @@ function drawResultActions(stage, theme) {
  * @param {() => void} onClick - 클릭 시 실행 함수
  */
 function drawResultActionButton(label, x, y, w, h, theme, primary, enabled, onClick) {
-  const fillColor = primary
-    ? [theme.accent[0], theme.accent[1], theme.accent[2], 235]
-    : [255, 255, 255, 18];
-  const strokeColor = primary ? theme.accent : [255, 255, 255, 55];
-  const textColor = primary ? [8, 9, 12] : [245, 245, 245];
-
-  drawBox(x, y, w, h, {
-    fill: enabled ? fillColor : [40, 40, 44],
-    stroke: enabled ? strokeColor : [90, 90, 94],
-    strokeWeight: 1.4,
-    radius: 6,
+  drawWoodPanel(x, y, w, h, {
+    selected: primary && enabled,
+    fillColor: primary ? CAMP.woodLight : [92, 56, 38],
+    radius: 7,
   });
   drawText(label, x + w / 2, y + h / 2, {
     size: 18,
     alignH: CENTER,
     alignV: CENTER,
     style: BOLD,
-    fill: enabled ? textColor : [130, 130, 134],
+    fill: enabled ? CAMP.cream : [130, 110, 92],
   });
   registerButton(x, y, w, h, enabled, onClick);
 }
@@ -365,18 +347,13 @@ function drawResultActionButton(label, x, y, w, h, theme, primary, enabled, onCl
  * @param {() => void} onClick - 클릭 시 실행 함수
  */
 function drawResultSmallButton(label, x, y, w, h, enabled, onClick) {
-  drawBox(x, y, w, h, {
-    fill: enabled ? [255, 255, 255, 230] : [255, 255, 255, 20],
-    stroke: enabled ? [255, 255, 255, 230] : [255, 255, 255, 42],
-    strokeWeight: 1,
-    radius: 6,
-  });
+  drawCreamPanel(x, y, w, h, { selected: enabled, radius: 6 });
   drawText(label, x + w / 2, y + h / 2, {
     size: 12,
     alignH: CENTER,
     alignV: CENTER,
     style: BOLD,
-    fill: enabled ? [8, 9, 12] : [140, 144, 152],
+    fill: enabled ? CAMP.ink : [130, 110, 92],
   });
   registerButton(x, y, w, h, enabled, onClick);
 }

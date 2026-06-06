@@ -5,14 +5,15 @@
 function drawPlayingScreen() {
   updateNotes();
   prepareLeaderboardForPlaying();
+  const stage = stageRect();
   const shake = playingShakeOffset();
+
   push();
   translate(shake.x, shake.y);
   drawCamera();
   drawPlayfield();
   pop();
 
-  const stage = stageRect();
   const hitY = stage.y + stage.h * GAME_CONFIG.hitLineY;
 
   drawPlayingLeaderboard(stage);
@@ -38,11 +39,15 @@ function drawPlayingScreen() {
   }
 
   if (Face.noses.length === 0) {
-    drawText("SKEWER LOST", stage.x + stage.w / 2, stage.y + stage.h / 2, {
+    drawCreamPanel(stage.x + 44, stage.y + stage.h / 2 - 26, stage.w - 88, 52, {
+      selected: true,
+    });
+    drawText("WHERE'S THE SKEWER?", stage.x + stage.w / 2, stage.y + stage.h / 2, {
       size: 22,
       alignH: CENTER,
       alignV: CENTER,
       style: BOLD,
+      fill: CAMP.ink,
     });
   }
 }
@@ -50,14 +55,15 @@ function drawPlayingScreen() {
 function drawPlayingTopHud(stage) {
   const hudH = 54;
   const hudY = stage.y;
-  drawBox(stage.x, hudY, stage.w, hudH, { fill: [0, 0, 0, 142] });
+  drawBox(stage.x, hudY, stage.w, hudH, { fill: [47, 28, 22, 178] });
+  drawBox(stage.x, hudY + hudH - 4, stage.w, 4, { fill: [255, 151, 66, 92] });
 
   drawText(`SCORE ${Play.score}`, stage.x + stage.w / 2, hudY + hudH / 2, {
     size: 19,
     alignH: CENTER,
     alignV: CENTER,
     style: BOLD,
-    fill: [245, 245, 245],
+    fill: CAMP.cream,
   });
 }
 
@@ -122,8 +128,8 @@ function drawPlayingLeaderboardCard(entry, x, y, w, h) {
   }
 
   drawBox(x, y, w, h, {
-    fill: current ? [0, 0, 0, 184] : [0, 0, 0, 116],
-    stroke: current ? [255, 245, 176, active ? 230 : 150] : [255, 255, 255, 32],
+    fill: current ? [82, 45, 29, 208] : [43, 27, 24, 142],
+    stroke: current ? [255, 190, 93, active ? 230 : 150] : [255, 218, 156, 38],
     strokeWeight: current ? 1.3 : 1,
     radius: 6,
   });
@@ -133,12 +139,12 @@ function drawPlayingLeaderboardCard(entry, x, y, w, h) {
     alignH: CENTER,
     alignV: CENTER,
     style: BOLD,
-    fill: current ? [255, 245, 176] : [218, 222, 228],
+    fill: current ? CAMP.toast : CAMP.creamDim,
   });
 
   push();
   noStroke();
-  fill(current ? [255, 245, 176] : [150, 158, 168]);
+  fill(current ? CAMP.toast : [172, 133, 88]);
   circle(x + rankW + 9, y + h / 2, dotSize);
   pop();
 
@@ -147,22 +153,22 @@ function drawPlayingLeaderboardCard(entry, x, y, w, h) {
     alignH: LEFT,
     alignV: CENTER,
     style: BOLD,
-    fill: current ? [255, 255, 255] : [224, 228, 234],
+    fill: current ? CAMP.cream : CAMP.creamDim,
   });
   drawText(formatLeaderboardScore(entry.score), scoreX, y + h / 2, {
     size: 12,
     alignH: RIGHT,
     alignV: CENTER,
     style: BOLD,
-    fill: current ? [255, 245, 176] : [238, 240, 244],
+    fill: current ? CAMP.toast : CAMP.cream,
   });
   pop();
 }
 
 function drawPlayingLeaderboardStatus(label, x, y, w, h) {
   drawBox(x, y, w, h, {
-    fill: [0, 0, 0, 132],
-    stroke: [255, 255, 255, 30],
+    fill: [43, 27, 24, 150],
+    stroke: [255, 218, 156, 40],
     strokeWeight: 1,
     radius: 6,
   });
@@ -171,7 +177,7 @@ function drawPlayingLeaderboardStatus(label, x, y, w, h) {
     alignH: LEFT,
     alignV: CENTER,
     style: BOLD,
-    fill: [210, 214, 220],
+    fill: CAMP.creamDim,
   });
 }
 

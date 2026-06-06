@@ -10,18 +10,22 @@
  * @param {() => void} onClick - 클릭 시 실행 함수
  */
 function drawButton(label, x, y, w, h, enabled, onClick) {
-  drawBox(x, y, w, h, {
-    fill: enabled ? 255 : 0,
-    stroke: enabled ? 255 : 110,
-    strokeWeight: 1.5,
-    radius: 6,
+  drawWoodPanel(x, y, w, h, {
+    selected: enabled,
+    fillColor: enabled ? CAMP.woodLight : [82, 63, 52],
+    radius: 7,
   });
+  if (enabled) {
+    noStroke();
+    fill(255, 198, 98, 46 + sin(millis() * 0.006) * 10);
+    rect(x + 8, y + 8, w - 16, h - 16, 5);
+  }
   drawText(label, x + w / 2, y + h / 2, {
     size: 20,
     alignH: CENTER,
     alignV: CENTER,
     style: BOLD,
-    fill: enabled ? 0 : 130,
+    fill: enabled ? CAMP.cream : [158, 132, 104],
   });
   App.uiButtons.push({ x, y, w, h, enabled, onClick: enabled ? onClick : null });
 }

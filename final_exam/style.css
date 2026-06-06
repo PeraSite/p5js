@@ -10,8 +10,8 @@ html, body {
   height: 100svh;
   min-height: 100svh;
   overflow: hidden;
-  background: #050608;
-  color: #fff;
+  background: #10162a;
+  color: #ffedc5;
   font-family: "Dalmoori", sans-serif;
   overscroll-behavior: none;
   position: fixed;
@@ -25,19 +25,41 @@ html, body {
   position: fixed;
   inset: 0;
   z-index: 10;
-  background: #050608;
+  display: grid;
+  place-items: center;
+  background: #10162a;
+  image-rendering: pixelated;
 }
 
-#p5_loading::before {
-  content: "";
-  display: block;
+.loading-stage {
+  position: relative;
   width: min(100vw, 56.25svh);
-  aspect-ratio: 9 / 16;
+  height: min(100svh, 177.7778vw);
+  overflow: hidden;
+  background:
+    linear-gradient(rgba(5, 7, 14, 0.18), rgba(5, 7, 14, 0.18)),
+    url("assets/ui/bg-camp.png") center / cover no-repeat;
+}
+
+.loading-logo {
+  width: 72%;
+  height: 50%;
+  position: absolute;
+  left: 14%;
+  top: 4%;
+  background: url("assets/ui/logo-title.png") center / contain no-repeat;
+  image-rendering: pixelated;
+}
+
+.loading-copy {
   position: absolute;
   left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  background: url("assets/loading-screen.png") center / cover no-repeat;
+  bottom: 10%;
+  transform: translateX(-50%);
+  color: #ffedc5;
+  font: 700 22px "Dalmoori", sans-serif;
+  letter-spacing: 0;
+  text-shadow: 0 3px 0 #4d2b1d, 0 0 12px rgba(255, 137, 52, 0.85);
 }
 
 canvas {
@@ -47,4 +69,5 @@ canvas {
   height: 100svh;
   position: fixed;
   inset: 0;
+  image-rendering: pixelated;
 }

@@ -3,18 +3,23 @@
  * @author 한채아
  */
 function drawSongSelectScreen() {
-  background(0);
   const stage = stageRect();
+  drawUiBackground(stage, { dim: 78 });
 
-  drawText("BEAT SELECT", stage.x + stage.w / 2, stage.y + 38, {
-    size: 28,
-    alignH: CENTER,
-    alignV: TOP,
-    style: BOLD,
+  drawCreamAssetPanel(stage.x + 16, stage.y + 76, stage.w - 32, stage.h - 172, {
+    alpha: 242,
   });
 
-  const gap = 8;
-  const top = stage.y + 82;
+  drawText("PICK A CAMP SONG", stage.x + stage.w / 2, stage.y + 54, {
+    size: 22,
+    alignH: CENTER,
+    alignV: CENTER,
+    style: BOLD,
+    fill: CAMP.cream,
+  });
+
+  const gap = 10;
+  const top = stage.y + 128;
   const bottomReserve = 104;
   const availableH = stage.h - (top - stage.y) - bottomReserve;
   const cardH = constrain(
@@ -24,14 +29,14 @@ function drawSongSelectScreen() {
   );
   for (let i = 0; i < App.songs.length; i += 1) {
     const song = App.songs[i];
-    const x = stage.x + 28;
+    const x = stage.x + 42;
     const y = top + i * (cardH + gap);
     const index = i;
 
     drawSelectableCard(
       x,
       y,
-      stage.w - 56,
+      stage.w - 84,
       cardH,
       i === App.selectedSong,
       song.title,
@@ -42,7 +47,7 @@ function drawSongSelectScreen() {
   }
 
   drawButton(
-    "PLAY",
+    "ROAST!",
     stage.x + 54,
     stage.y + stage.h - 96,
     stage.w - 108,
