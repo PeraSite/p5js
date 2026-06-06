@@ -52,19 +52,12 @@ function drawPlayingTopHud(stage) {
   const hudY = stage.y;
   drawBox(stage.x, hudY, stage.w, hudH, { fill: [0, 0, 0, 142] });
 
-  drawText(`SCORE ${Play.score}`, stage.x + 18, hudY + hudH / 2, {
-    size: 17,
-    alignH: LEFT,
+  drawText(`SCORE ${Play.score}`, stage.x + stage.w / 2, hudY + hudH / 2, {
+    size: 19,
+    alignH: CENTER,
     alignV: CENTER,
     style: BOLD,
     fill: [245, 245, 245],
-  });
-  drawText(`COMBO ${Play.combo}`, stage.x + stage.w - 18, hudY + hudH / 2, {
-    size: 17,
-    alignH: RIGHT,
-    alignV: CENTER,
-    style: BOLD,
-    fill: [255, 226, 168],
   });
 }
 
@@ -75,7 +68,7 @@ function drawPlayingLeaderboard(stage) {
   const cardH = 34;
   const rowGap = cardH + 4;
   const x = stage.x + 12;
-  const y = stage.y + 12;
+  const y = stage.y + 66;
 
   if (rows.length === 0) {
     const failed = song && Leaderboard.loadFailedSongId === song.id;
@@ -225,6 +218,7 @@ function playingShakeOffset() {
  * @returns {number[]} p5 fill 색상
  */
 function judgeColor(judge) {
+  if (judge.startsWith("POP")) return [255, 226, 120];
   if (judge === "BURNT") return [72, 58, 48];
   if (judge === "UNDER") return [255, 132, 146];
   if (judge === "MELLOW!") return [255, 245, 176];

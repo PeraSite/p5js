@@ -23,6 +23,10 @@ function drawPlayfield() {
   for (const nose of Face.noses) {
     drawRod(stage, nose);
   }
+  if (Face.noses.length > 0) {
+    drawSkeweredMarshmallows(Face.noses[0]);
+  }
+  drawStackBursts();
 }
 
 function drawFire(stage) {
@@ -58,14 +62,6 @@ function drawRod(stage, nose) {
 
   imageMode(CORNER);
   image(App.assets.rod, nose.x - rodW / 2, nose.y, rodW, App.assets.rod.height);
-
-  noFill();
-  stroke(255, 244, 210, 230);
-  strokeWeight(2);
-  circle(nose.x, nose.y, GAME_CONFIG.rodTipRadius * 2);
-  noStroke();
-  fill(255, 244, 210);
-  circle(nose.x, nose.y, 6);
 }
 
 function drawMarshmallow(note, x, y, state, rotation) {
@@ -83,11 +79,52 @@ function drawMarshmallow(note, x, y, state, rotation) {
 
 function drawEjectedMarshmallows() {
   for (const item of Play.ejections) {
-    const noteLike = {
-      drum: item.color === "blue" ? "hihat" : item.color === "red" ? "kick" : null,
-    };
+    const noteLike = noteLikeForMarshmallowColor(item.color);
     drawMarshmallow(noteLike, item.x, item.y, item.state, item.rotation);
   }
+}
+
+function drawSkeweredMarshmallows(nose) {
+  for (let i = 0; i < Play.skewered.length; i += 1) {
+    const item = Play.skewered[i];
+    const y = nose.y + GAME_CONFIG.noteSize * (0.5 + i * 0.62);
+    drawMarshmallow(noteLikeForMarshmallowColor(item.color), nose.x, y, "roasted", 0);
+  }
+}
+
+function drawStackBursts() {
+  for (const burst of Play.stackBursts) {
+    const age = millis() - burst.at;
+    const t = constrain(age / burst.duration, 0, 1);
+    const alpha = 220 * (1 - t);
+    const radius = GAME_CONFIG.noteSize * (0.6 + t * 2.2);
+
+    noFill();
+    stroke(255, 226, 120, alpha);
+    strokeWeight(4 * (1 - t) + 1);
+    circle(burst.x, burst.y, radius);
+
+    const sparkCount = 10;
+    stroke(255, 245, 190, alpha);
+    strokeWeight(2);
+    for (let i = 0; i < sparkCount; i += 1) {
+      const angle = (TWO_PI / sparkCount) * i;
+      const inner = radius * 0.25;
+      const outer = radius * 0.58;
+      line(
+        burst.x + cos(angle) * inner,
+        burst.y + sin(angle) * inner,
+        burst.x + cos(angle) * outer,
+        burst.y + sin(angle) * outer,
+      );
+    }
+  }
+}
+
+function noteLikeForMarshmallowColor(colorName) {
+  return {
+    drum: colorName === "blue" ? "hihat" : colorName === "red" ? "kick" : null,
+  };
 }
 
 /**

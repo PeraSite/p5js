@@ -22,6 +22,8 @@ function resetGame() {
   Play.shakeAt = 0;
   Play.shakePower = 0;
   Play.ejections = [];
+  Play.skewered = [];
+  Play.stackBursts = [];
 }
 
 /**
@@ -54,6 +56,7 @@ async function startGame() {
  */
 function updateNotes() {
   updateEjections();
+  updateStackBursts();
   for (const note of Play.notes) {
     if (note.hit || note.missed) continue;
 
@@ -65,7 +68,7 @@ function updateNotes() {
       if (rodTipTouchesNote(nose, pos)) {
         touched = true;
         if (delta <= 0 && abs(delta) <= GAME_CONFIG.judgeWindows.at(-1).window) {
-          hitNote(note, delta);
+          hitNote(note, delta, nose);
         } else {
           missNote(note, delta > 0 ? "BURNT" : "UNDER", true);
         }
@@ -89,8 +92,11 @@ function updateNotes() {
 }
 
 function rodTipTouchesNote(nose, pos) {
-  return dist(nose.x, nose.y, pos.x, pos.y) <
-    GAME_CONFIG.rodTipRadius + GAME_CONFIG.noteSize * 0.36;
+  const xOk = abs(pos.x - nose.x) <= GAME_CONFIG.noteSize * 0.38;
+  const yOk =
+    pos.y >= nose.y - 2 &&
+    pos.y <= nose.y + GAME_CONFIG.noteSize * 0.46;
+  return xOk && yOk;
 }
 
 function rodBodyTouchesNote(nose, pos) {
@@ -109,7 +115,7 @@ function rodBodyTouchesNote(nose, pos) {
  * @param {object} note - Play.notes 항목
  * @param {number} delta - gameTime - note.time (ms)
  */
-function hitNote(note, delta) {
+function hitNote(note, delta, nose) {
   const result = GAME_CONFIG.judgeWindows.find(
     (item) => abs(delta) <= item.window,
   );
@@ -120,8 +126,43 @@ function hitNote(note, delta) {
   Play.score += result.score + Play.combo * 12;
   Play.judge = result.label;
   Play.judgeAt = millis();
+  addSkeweredMarshmallow(note, nose);
   addHitEffect(note, result.label);
   playNoteSound(note);
+}
+
+function addSkeweredMarshmallow(note, nose) {
+  Play.skewered.unshift({
+    color: marshmallowColorForNote(note),
+    x: nose.x,
+    y: nose.y,
+    at: millis(),
+  });
+
+  if (Play.skewered.length >= GAME_CONFIG.skewerStackLimit) {
+    addStackBurst(nose);
+    Play.score += GAME_CONFIG.skewerStackBonus;
+    Play.judge = `POP +${GAME_CONFIG.skewerStackBonus}`;
+    Play.judgeAt = millis();
+    Play.skewered = [];
+  }
+}
+
+function addStackBurst(nose) {
+  Play.stackBursts.push({
+    x: nose.x,
+    y: nose.y + GAME_CONFIG.noteSize * 1.6,
+    at: millis(),
+    duration: 460,
+  });
+  if (Play.stackBursts.length > 6) Play.stackBursts.shift();
+}
+
+function updateStackBursts() {
+  const now = millis();
+  Play.stackBursts = Play.stackBursts.filter(
+    (burst) => now - burst.at < burst.duration,
+  );
 }
 
 /**
@@ -201,6 +242,7 @@ function missNote(note, label = "BURNT", eject = false) {
   Play.combo = 0;
   Play.judge = label;
   Play.judgeAt = millis();
+  playNoteSound(note);
   if (eject) addMarshmallowEjection(note);
   addHitEffect(note, label);
 }

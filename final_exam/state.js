@@ -35,6 +35,8 @@ const Play = {
   shakeAt: 0,
   shakePower: 0,
   ejections: [],
+  skewered: [],
+  stackBursts: [],
 };
 
 /**
