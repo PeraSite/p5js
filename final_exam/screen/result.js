@@ -43,22 +43,22 @@ function resultTheme(rank) {
     S: {
       accent: [255, 232, 130],
       dim: [74, 58, 18],
-      title: "PERFECT FLOW",
+      title: "GOLDEN ROAST",
     },
     A: {
-      accent: [135, 218, 255],
-      dim: [18, 56, 80],
-      title: "CLEAN CLEAR",
+      accent: [255, 188, 118],
+      dim: [80, 42, 18],
+      title: "TOASTY RUN",
     },
     B: {
       accent: [168, 242, 185],
       dim: [24, 68, 42],
-      title: "GOOD RUN",
+      title: "WARM BATCH",
     },
     C: {
       accent: [255, 132, 146],
       dim: [86, 26, 36],
-      title: "KEEP GOING",
+      title: "BURNT EDGE",
     },
   };
   return themes[rank] ?? themes.C;
@@ -71,11 +71,11 @@ function resultTheme(rank) {
  * @returns {string} 배지 문구
  */
 function resultBadgeText(accuracy) {
-  if (Play.misses === 0 && Play.hits > 0) return "FULL COMBO";
-  if (accuracy >= 98) return "NEAR PERFECT";
-  if (Play.maxCombo >= 30) return "COMBO FLOW";
-  if (accuracy >= 85) return "STAGE CLEAR";
-  return "TRY AGAIN";
+  if (Play.misses === 0 && Play.hits > 0) return "NO BURNS";
+  if (accuracy >= 98) return "MELLOW MASTER";
+  if (Play.maxCombo >= 30) return "SKEWER STREAK";
+  if (accuracy >= 85) return "CAMPFIRE CLEAR";
+  return "MORE ROASTING";
 }
 
 /**
@@ -105,18 +105,18 @@ function drawResultBackdrop(stage, theme) {
 }
 
 /**
- * 배경에 작은 음표와 별 마크를 배치한다. 정적 장식이라 산만하지 않다.
+ * 배경에 작은 불꽃과 별 마크를 배치한다. 정적 장식이라 산만하지 않다.
  * @author 정제훈
  * @param {{ x: number, y: number, w: number, h: number }} stage - 스테이지 영역
  * @param {object} theme - 랭크 테마
  */
 function drawResultMarks(stage, theme) {
   const marks = [
-    ["♪", 0.18, 0.18, 18, 38],
+    ["*", 0.18, 0.18, 18, 38],
     ["*", 0.82, 0.2, 14, 34],
-    ["♪", 0.72, 0.37, 16, 24],
+    ["*", 0.72, 0.37, 16, 24],
     ["*", 0.24, 0.46, 12, 25],
-    ["♪", 0.16, 0.71, 15, 22],
+    ["*", 0.16, 0.71, 15, 22],
     ["*", 0.86, 0.66, 12, 24],
   ];
 
@@ -175,8 +175,8 @@ function drawResultStats(stage, accuracy) {
   const stats = [
     ["SCORE", String(Play.score)],
     ["ACCURACY", `${accuracy.toFixed(1)}%`],
-    ["MAX COMBO", String(Play.maxCombo)],
-    ["HIT / MISS", `${Play.hits} / ${Play.misses}`],
+    ["BEST STREAK", String(Play.maxCombo)],
+    ["ROAST / BURN", `${Play.hits} / ${Play.misses}`],
   ];
   const x = stage.x + 28;
   const y = stage.y + 276;

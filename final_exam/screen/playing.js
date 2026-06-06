@@ -16,7 +16,7 @@ function drawPlayingScreen() {
   const hitY = stage.y + stage.h * GAME_CONFIG.hitLineY;
 
   drawPlayingLeaderboard(stage);
-  drawPlayingBottomHud(stage);
+  drawPlayingTopHud(stage);
 
   if (Play.judge && millis() - Play.judgeAt < 520) {
     const judgeAge = millis() - Play.judgeAt;
@@ -38,7 +38,7 @@ function drawPlayingScreen() {
   }
 
   if (Face.noses.length === 0) {
-    drawText("FACE LOST", stage.x + stage.w / 2, stage.y + stage.h / 2, {
+    drawText("SKEWER LOST", stage.x + stage.w / 2, stage.y + stage.h / 2, {
       size: 22,
       alignH: CENTER,
       alignV: CENTER,
@@ -47,17 +47,24 @@ function drawPlayingScreen() {
   }
 }
 
-function drawPlayingBottomHud(stage) {
-  const hudH = 64;
-  const hudY = stage.y + stage.h - hudH;
-  drawBox(stage.x, hudY, stage.w, hudH, { fill: [0, 0, 0, 154] });
+function drawPlayingTopHud(stage) {
+  const hudH = 54;
+  const hudY = stage.y;
+  drawBox(stage.x, hudY, stage.w, hudH, { fill: [0, 0, 0, 142] });
 
-  drawText(`SCORE ${Play.score}`, stage.x + stage.w / 2, hudY + hudH / 2, {
-    size: 24,
-    alignH: CENTER,
+  drawText(`SCORE ${Play.score}`, stage.x + 18, hudY + hudH / 2, {
+    size: 17,
+    alignH: LEFT,
     alignV: CENTER,
     style: BOLD,
     fill: [245, 245, 245],
+  });
+  drawText(`COMBO ${Play.combo}`, stage.x + stage.w - 18, hudY + hudH / 2, {
+    size: 17,
+    alignH: RIGHT,
+    alignV: CENTER,
+    style: BOLD,
+    fill: [255, 226, 168],
   });
 }
 
@@ -218,10 +225,10 @@ function playingShakeOffset() {
  * @returns {number[]} p5 fill 색상
  */
 function judgeColor(judge) {
-  if (judge === "MISS") return [255, 96, 110];
-  if (judge === "EXCELLENT") return [255, 245, 176];
-  if (judge === "GREAT") return [180, 225, 255];
-  if (judge === "GOOD") return [214, 255, 205];
-  if (judge === "BAD") return [210, 210, 210];
+  if (judge === "BURNT") return [72, 58, 48];
+  if (judge === "UNDER") return [255, 132, 146];
+  if (judge === "MELLOW!") return [255, 245, 176];
+  if (judge === "TOASTY") return [255, 188, 118];
+  if (judge === "WARM") return [214, 255, 205];
   return [255, 255, 255];
 }

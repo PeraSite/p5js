@@ -7,6 +7,12 @@ const App = {
   selectedSong: 0,
   uiButtons: [],
   songs: [],
+  font: null,
+  assets: {
+    rod: null,
+    fire: null,
+    marshmallows: {},
+  },
 };
 
 /**
@@ -28,6 +34,7 @@ const Play = {
   hitEffects: [],
   shakeAt: 0,
   shakePower: 0,
+  ejections: [],
 };
 
 /**

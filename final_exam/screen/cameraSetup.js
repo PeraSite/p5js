@@ -8,7 +8,7 @@ function drawCameraSetupScreen() {
   const stage = stageRect();
   drawBox(stage.x, stage.y, stage.w, stage.h, { fill: [0, 0, 0, 170] });
 
-  drawText("CAMERA SETUP", stage.x + stage.w / 2, stage.y + 42, {
+  drawText("SKEWER SETUP", stage.x + stage.w / 2, stage.y + 42, {
     size: 26,
     alignH: CENTER,
     alignV: TOP,

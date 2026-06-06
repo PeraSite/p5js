@@ -3,6 +3,8 @@
  * @author 한채아
  */
 function preload() {
+  App.font = loadFont(GAME_CONFIG.fontPath);
+  loadMellowAssets();
   loadJSON(GAME_CONFIG.songsPath, (catalog) => {
     App.songs = catalog.songs;
     for (const song of App.songs) {
@@ -17,6 +19,29 @@ function preload() {
   });
 }
 
+function loadMellowAssets() {
+  const base = GAME_CONFIG.mellowAssetsPath;
+  App.assets.rod = loadImage(`${base}/rod.png`);
+  App.assets.fire = loadImage(`${base}/fire.png`);
+  App.assets.marshmallows = {
+    white: {
+      raw: loadImage(`${base}/marshmallow-white-raw.png`),
+      roasted: loadImage(`${base}/marshmallow-white-roasted.png`),
+      burnt: loadImage(`${base}/marshmallow-burnt.png`),
+    },
+    red: {
+      raw: loadImage(`${base}/marshmallow-red-raw.png`),
+      roasted: loadImage(`${base}/marshmallow-red-roasted.png`),
+      burnt: loadImage(`${base}/marshmallow-burnt.png`),
+    },
+    blue: {
+      raw: loadImage(`${base}/marshmallow-blue-raw.png`),
+      roasted: loadImage(`${base}/marshmallow-blue-roasted.png`),
+      burnt: loadImage(`${base}/marshmallow-burnt.png`),
+    },
+  };
+}
+
 /**
  * p5 setup: 캔버스·오디오·카메라를 초기화하고 메인 상태로 진입한다.
  * @author 한채아
@@ -24,7 +49,8 @@ function preload() {
 function setup() {
   pixelDensity(1);
   createCanvas(windowWidth, windowHeight);
-  textFont("Arial");
+  noSmooth();
+  textFont(App.font);
   setupPiano();
   setupDrums();
   setupCamera();

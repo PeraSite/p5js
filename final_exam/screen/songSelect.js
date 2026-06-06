@@ -6,7 +6,7 @@ function drawSongSelectScreen() {
   background(0);
   const stage = stageRect();
 
-  drawText("SONG SELECT", stage.x + stage.w / 2, stage.y + 38, {
+  drawText("BEAT SELECT", stage.x + stage.w / 2, stage.y + 38, {
     size: 28,
     alignH: CENTER,
     alignV: TOP,

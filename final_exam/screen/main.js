@@ -6,16 +6,16 @@ function drawMainScreen() {
   background(0);
   const stage = stageRect();
 
-  drawText("NOSE\nPIANO\nRUSH", stage.x + stage.w / 2, stage.y + stage.h * 0.34, {
-    size: 42,
+  drawText("mellow\nbeat", stage.x + stage.w / 2, stage.y + stage.h * 0.32, {
+    size: 48,
     alignH: CENTER,
     alignV: CENTER,
-    style: BOLD,
   });
-  drawText("2조 정제훈 한채아", stage.x + stage.w / 2, stage.y + stage.h * 0.62, {
+  drawText("2조 정제훈 한채아", stage.x + stage.w / 2, stage.y + stage.h * 0.6, {
     size: 16,
     alignH: CENTER,
     alignV: CENTER,
+    fill: [255, 226, 168],
   });
 
   drawButton(

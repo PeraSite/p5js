@@ -7,37 +7,86 @@ function drawPlayfield() {
   const lineY = stage.y + stage.h * GAME_CONFIG.hitLineY;
   const activeEffects = activeHitEffects();
 
-  stroke(180, 180, 180, 125);
-  strokeWeight(10);
-  line(stage.x, lineY, stage.x + stage.w, lineY);
-  stroke(255, 255, 255, 170);
-  strokeWeight(1);
-  line(stage.x, lineY, stage.x + stage.w, lineY);
+  drawFire(stage);
+  drawRoastGuide(stage, lineY);
   drawHitLineEffects(stage, lineY, activeEffects);
 
   for (const note of Play.notes) {
     if (note.hit || note.missed) continue;
     const pos = notePosition(note);
     if (!pos.visible) continue;
-    drawText("♪", pos.x, pos.y, {
-      size: GAME_CONFIG.noteSize,
-      alignH: CENTER,
-      alignV: CENTER,
-      style: BOLD,
-      fill: noteColor(note),
-    });
+    drawMarshmallow(note, pos.x, pos.y, marshmallowCookState(note), 0);
   }
 
+  drawEjectedMarshmallows();
   drawHitEffects(activeEffects);
-
   for (const nose of Face.noses) {
-    noFill();
-    stroke(255);
-    strokeWeight(3);
-    circle(nose.x, nose.y, GAME_CONFIG.noseRadius * 2);
-    noStroke();
-    fill(255);
-    circle(nose.x, nose.y, 7);
+    drawRod(stage, nose);
+  }
+}
+
+function drawFire(stage) {
+  const fireH = GAME_CONFIG.fireHeight;
+  const y = stage.y + stage.h - fireH;
+  imageMode(CORNER);
+  image(App.assets.fire, stage.x, y, stage.w, fireH);
+
+  noStroke();
+  fill(255, 86, 36, 26 + sin(millis() * 0.008) * 8);
+  rect(stage.x, y - 18, stage.w, 24);
+}
+
+function drawRoastGuide(stage, lineY) {
+  stroke(255, 210, 142, 165);
+  strokeWeight(8);
+  line(stage.x + 18, lineY, stage.x + stage.w - 18, lineY);
+  stroke(255, 248, 218, 220);
+  strokeWeight(1);
+  line(stage.x + 18, lineY, stage.x + stage.w - 18, lineY);
+
+  drawText("ROAST", stage.x + stage.w - 24, lineY - 20, {
+    size: 12,
+    alignH: RIGHT,
+    alignV: CENTER,
+    style: BOLD,
+    fill: [255, 226, 168],
+  });
+}
+
+function drawRod(stage, nose) {
+  const rodW = GAME_CONFIG.rodWidth;
+
+  imageMode(CORNER);
+  image(App.assets.rod, nose.x - rodW / 2, nose.y, rodW, App.assets.rod.height);
+
+  noFill();
+  stroke(255, 244, 210, 230);
+  strokeWeight(2);
+  circle(nose.x, nose.y, GAME_CONFIG.rodTipRadius * 2);
+  noStroke();
+  fill(255, 244, 210);
+  circle(nose.x, nose.y, 6);
+}
+
+function drawMarshmallow(note, x, y, state, rotation) {
+  const colorName = marshmallowColorForNote(note);
+  const img = App.assets.marshmallows[colorName][state];
+  const size = GAME_CONFIG.noteSize * (state === "burnt" ? 1.06 : 1);
+
+  push();
+  translate(x, y);
+  rotate(rotation);
+  imageMode(CENTER);
+  image(img, 0, 0, size, size);
+  pop();
+}
+
+function drawEjectedMarshmallows() {
+  for (const item of Play.ejections) {
+    const noteLike = {
+      drum: item.color === "blue" ? "hihat" : item.color === "red" ? "kick" : null,
+    };
+    drawMarshmallow(noteLike, item.x, item.y, item.state, item.rotation);
   }
 }
 
@@ -64,7 +113,7 @@ function activeHitEffects() {
 function drawHitLineEffects(stage, lineY, effects) {
   for (const effect of effects) {
     const age = millis() - effect.at;
-    if (effect.label === "MISS" || age > 180) continue;
+    if (effect.label === "BURNT" || effect.label === "UNDER" || age > 180) continue;
     const t = constrain(age / 180, 0, 1);
     const alpha = 155 * (1 - t) * effect.power;
     const span = stage.w * constrain(0.14 + effect.power * 0.11, 0.14, 0.28);
@@ -94,8 +143,9 @@ function drawHitEffects(effects) {
     strokeWeight(2 + 5 * fade * effect.power);
     circle(effect.x, effect.y, ring);
 
-    if (effect.label === "MISS") {
-      stroke(255, 72, 86, alpha);
+    if (effect.label === "BURNT" || effect.label === "UNDER") {
+      const mark = effect.label === "BURNT" ? [64, 52, 44] : [255, 72, 96];
+      stroke(mark[0], mark[1], mark[2], alpha);
       strokeWeight(4 * fade + 1);
       const size = base * (0.58 + t * 0.5);
       line(effect.x - size, effect.y - size, effect.x + size, effect.y + size);
@@ -107,7 +157,7 @@ function drawHitEffects(effects) {
     strokeWeight(1.5 + 2 * fade);
     circle(effect.x, effect.y, ring * 0.54);
 
-    const sparkCount = effect.label === "EXCELLENT" ? 8 : 5;
+    const sparkCount = effect.label === "MELLOW!" ? 8 : 5;
     for (let i = 0; i < sparkCount; i += 1) {
       const angle = (TWO_PI / sparkCount) * i + t * 0.45;
       const inner = ring * 0.28;
@@ -120,17 +170,4 @@ function drawHitEffects(effects) {
       );
     }
   }
-}
-
-/**
- * 드럼이 있으면 드럼 색을 우선하고, 아니면 피아노 색을 반환한다.
- * @author 정제훈
- * @param {object} note - Play.notes 항목
- * @returns {number[]} p5 fill 색상
- */
-function noteColor(note) {
-  if (note.drum && GAME_CONFIG.noteColors[note.drum]) {
-    return GAME_CONFIG.noteColors[note.drum];
-  }
-  return GAME_CONFIG.noteColors.piano;
 }

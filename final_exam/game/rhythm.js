@@ -21,6 +21,7 @@ function resetGame() {
   Play.hitEffects = [];
   Play.shakeAt = 0;
   Play.shakePower = 0;
+  Play.ejections = [];
 }
 
 /**
@@ -30,7 +31,7 @@ function resetGame() {
 async function startGame() {
   if (App.state !== "howTo") return;
   if (Face.noses.length === 0) {
-    Play.judge = "FACE REQUIRED";
+    Play.judge = "SKEWER REQUIRED";
     Play.judgeAt = millis();
     App.state = "cameraSetup";
     return;
@@ -52,31 +53,54 @@ async function startGame() {
  * 마지막 노트 후 1.8초 지나면 App.state를 result로 변경
  */
 function updateNotes() {
+  updateEjections();
   for (const note of Play.notes) {
     if (note.hit || note.missed) continue;
 
     const pos = notePosition(note);
     const delta = Play.gameTime - note.time;
-    const touching = Face.noses.some(
-      (nose) =>
-        dist(nose.x, nose.y, pos.x, pos.y) <
-        GAME_CONFIG.noseRadius + GAME_CONFIG.noteSize * 0.35,
-    );
 
-    if (touching) {
-      if (abs(delta) <= GAME_CONFIG.judgeWindows.at(-1).window) {
-        hitNote(note, delta);
-      } else {
-        playNoteSound(note);
-        missNote(note);
+    let touched = false;
+    for (const nose of Face.noses) {
+      if (rodTipTouchesNote(nose, pos)) {
+        touched = true;
+        if (delta <= 0 && abs(delta) <= GAME_CONFIG.judgeWindows.at(-1).window) {
+          hitNote(note, delta);
+        } else {
+          missNote(note, delta > 0 ? "BURNT" : "UNDER", true);
+        }
+        break;
       }
-    } else if (delta > GAME_CONFIG.missAfter) {
-      missNote(note);
+
+      if (rodBodyTouchesNote(nose, pos)) {
+        touched = true;
+        missNote(note, delta > 0 ? "BURNT" : "UNDER", true);
+        break;
+      }
+    }
+
+    if (!touched && delta > GAME_CONFIG.missAfter) {
+      missNote(note, "BURNT", false);
     }
   }
 
   const last = Play.notes[Play.notes.length - 1];
   if (last && Play.gameTime > last.time + 1800) App.state = "result";
+}
+
+function rodTipTouchesNote(nose, pos) {
+  return dist(nose.x, nose.y, pos.x, pos.y) <
+    GAME_CONFIG.rodTipRadius + GAME_CONFIG.noteSize * 0.36;
+}
+
+function rodBodyTouchesNote(nose, pos) {
+  const stage = stageRect();
+  const fireTop = stage.y + stage.h - GAME_CONFIG.fireHeight;
+  const nearRodX = abs(pos.x - nose.x) <
+    GAME_CONFIG.rodWidth * 0.5 + GAME_CONFIG.noteSize * 0.36;
+  const belowTip = pos.y > nose.y + GAME_CONFIG.rodTipRadius;
+  const aboveFire = pos.y < fireTop + GAME_CONFIG.noteSize * 0.25;
+  return nearRodX && belowTip && aboveFire;
 }
 
 /**
@@ -110,19 +134,14 @@ function addHitEffect(note, label) {
   const pos = notePosition(note);
   const comboBoost = Play.combo >= 10 ? constrain(Play.combo / 50, 0.12, 0.35) : 0;
   const levels = {
-    EXCELLENT: { power: 1.25, shake: 4, duration: 360 },
-    GREAT: { power: 1, shake: 3, duration: 320 },
-    GOOD: { power: 0.72, shake: 1.8, duration: 280 },
-    BAD: { power: 0.48, shake: 1.2, duration: 240 },
-    MISS: { power: 0.38, shake: 0, duration: 220 },
+    "MELLOW!": { power: 1.25, shake: 4, duration: 360 },
+    TOASTY: { power: 1, shake: 3, duration: 320 },
+    WARM: { power: 0.72, shake: 1.8, duration: 280 },
+    UNDER: { power: 0.48, shake: 0, duration: 240 },
+    BURNT: { power: 0.38, shake: 0, duration: 220 },
   };
-  const level = levels[label] ?? levels.GOOD;
-  const color =
-    label === "MISS"
-      ? [255, 72, 86]
-      : note.drum && GAME_CONFIG.noteColors[note.drum]
-        ? GAME_CONFIG.noteColors[note.drum]
-        : GAME_CONFIG.noteColors.piano;
+  const level = levels[label] ?? levels.WARM;
+  const color = judgeEffectColor(label, note);
 
   Play.hitEffects.push({
     x: pos.x,
@@ -141,6 +160,17 @@ function addHitEffect(note, label) {
   }
 }
 
+function judgeEffectColor(label, note) {
+  if (label === "BURNT") return [54, 44, 40];
+  if (label === "UNDER") return [255, 150, 170];
+  const colors = {
+    white: [255, 239, 205],
+    red: [255, 138, 138],
+    blue: [135, 207, 255],
+  };
+  return colors[marshmallowColorForNote(note)] ?? colors.white;
+}
+
 /**
  * 채보 노트에 지정된 피아노·드럼 소리를 한 번 재생한다.
  * @author 정제훈
@@ -155,7 +185,7 @@ function playNoteSound(note) {
       0.9,
     );
   }
-  if (note.drum && GAME_CONFIG.noteColors[note.drum]) {
+  if (["kick", "snare", "hihat"].includes(note.drum)) {
     Audio.drums.player(note.drum).start(Tone.immediate());
   }
 }
@@ -165,13 +195,46 @@ function playNoteSound(note) {
  * @author 정제훈
  * @param {object} note - Play.notes 항목
  */
-function missNote(note) {
+function missNote(note, label = "BURNT", eject = false) {
   note.missed = true;
   Play.misses += 1;
   Play.combo = 0;
-  Play.judge = "MISS";
+  Play.judge = label;
   Play.judgeAt = millis();
-  addHitEffect(note, "MISS");
+  if (eject) addMarshmallowEjection(note);
+  addHitEffect(note, label);
+}
+
+function addMarshmallowEjection(note) {
+  const pos = notePosition(note);
+  const dir = random() < 0.5 ? -1 : 1;
+  Play.ejections.push({
+    x: pos.x,
+    y: pos.y,
+    vx: dir * random(6.2, 8.6),
+    vy: random(-8.4, -5.8),
+    gravity: 0.55,
+    rotation: random(-0.25, 0.25),
+    spin: dir * random(0.12, 0.2),
+    color: marshmallowColorForNote(note),
+    state: marshmallowCookState(note),
+  });
+  if (Play.ejections.length > 18) Play.ejections.shift();
+}
+
+function updateEjections() {
+  const stage = stageRect();
+  Play.ejections = Play.ejections.filter((item) => {
+    item.x += item.vx;
+    item.y += item.vy;
+    item.vy += item.gravity;
+    item.rotation += item.spin;
+    return (
+      item.x > stage.x - GAME_CONFIG.noteSize * 3 &&
+      item.x < stage.x + stage.w + GAME_CONFIG.noteSize * 3 &&
+      item.y < stage.y + stage.h + GAME_CONFIG.noteSize * 3
+    );
+  });
 }
 
 /**
@@ -219,4 +282,17 @@ function notePosition(note) {
     y: delta <= 0 ? lerp(startY, hitY, before) : lerp(hitY, endY, after),
     visible: before >= 0 && after <= 1,
   };
+}
+
+function marshmallowColorForNote(note) {
+  if (note.drum === "hihat") return "blue";
+  if (note.drum === "kick" || note.drum === "snare") return "red";
+  return "white";
+}
+
+function marshmallowCookState(note) {
+  const delta = Play.gameTime - note.time;
+  if (delta > 0) return "burnt";
+  if (abs(delta) <= GAME_CONFIG.judgeWindows.at(-1).window) return "roasted";
+  return "raw";
 }

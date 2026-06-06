@@ -6,7 +6,7 @@ function drawHowToScreen() {
   background(0);
   const stage = stageRect();
 
-  drawText("HOW TO PLAY", stage.x + stage.w / 2, stage.y + 50, {
+  drawText("HOW TO ROAST", stage.x + stage.w / 2, stage.y + 50, {
     size: 28,
     alignH: CENTER,
     alignV: TOP,
@@ -15,9 +15,14 @@ function drawHowToScreen() {
 
   const x = stage.x + 42;
   const y = stage.y + 150;
-  drawText("1. 노트가 아래로 떨어집니다", x, y, { size: 17, alignH: LEFT, alignV: TOP });
-  drawText("2. 코를 움직여 노트에 맞추세요", x, y + 54, { size: 17, alignH: LEFT, alignV: TOP });
-  drawText("3. 정확한 타이밍에 맞추면 점수를 얻습니다", x, y + 108, {
+  drawText("1. 마시멜로가 아래로 떨어집니다", x, y, { size: 17, alignH: LEFT, alignV: TOP });
+  drawText("2. 코로 꼬치 끝을 움직이세요", x, y + 54, { size: 17, alignH: LEFT, alignV: TOP });
+  drawText("3. 노릇해진 순간 끝으로 찌르세요", x, y + 108, {
+    size: 17,
+    alignH: LEFT,
+    alignV: TOP,
+  });
+  drawText("4. 옆면, 안익음, 탄 뒤는 실패입니다", x, y + 162, {
     size: 17,
     alignH: LEFT,
     alignV: TOP,

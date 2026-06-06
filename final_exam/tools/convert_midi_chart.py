@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convert a Standard MIDI File melody track into a Nose Piano chart."""
+"""Convert a Standard MIDI File melody track into a mellow beat chart."""
 
 from __future__ import annotations
 
