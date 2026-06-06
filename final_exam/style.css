@@ -20,6 +20,26 @@ html, body {
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
+
+#p5_loading {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: #050608;
+}
+
+#p5_loading::before {
+  content: "";
+  display: block;
+  width: min(100vw, 56.25svh);
+  aspect-ratio: 9 / 16;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: url("assets/loading-screen.png") center / cover no-repeat;
+}
+
 canvas {
   display: block;
   cursor: default;
