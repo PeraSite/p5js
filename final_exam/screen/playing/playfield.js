@@ -1,11 +1,10 @@
 /**
  * 플레이 중 판정선·낙하 노트·코 커서를 캔버스에 그린다.
- * @author 한채아
  */
 function drawPlayfield() {
-  const stage = stageRect();
+  const stage = getStageRect();
   const lineY = stage.y + stage.h * GAME_CONFIG.hitLineY;
-  const activeEffects = activeHitEffects();
+  const activeEffects = getActiveHitEffects();
 
   drawFire(stage);
   drawRoastGuide(stage, lineY);
@@ -13,9 +12,9 @@ function drawPlayfield() {
 
   for (const note of Play.notes) {
     if (note.hit || note.missed) continue;
-    const pos = notePosition(note);
+    const pos = getNotePosition(note);
     if (!pos.visible) continue;
-    drawMarshmallow(note, pos.x, pos.y, marshmallowCookState(note), 0);
+    drawMarshmallow(note, pos.x, pos.y, getMarshmallowCookState(note), 0);
   }
 
   drawEjectedMarshmallows();
@@ -29,6 +28,9 @@ function drawPlayfield() {
   drawStackBursts();
 }
 
+/**
+ * 스테이지 아래쪽의 불 이미지를 그린다.
+ */
 function drawFire(stage) {
   const fireH = GAME_CONFIG.fireHeight;
   const y = stage.y + stage.h - fireH;
@@ -40,6 +42,9 @@ function drawFire(stage) {
   rect(stage.x, y - 18, stage.w, 24);
 }
 
+/**
+ * 노트를 찔러야 하는 타이밍 기준선을 그린다.
+ */
 function drawRoastGuide(stage, lineY) {
   stroke(255, 210, 142, 165);
   strokeWeight(8);
@@ -57,6 +62,9 @@ function drawRoastGuide(stage, lineY) {
   });
 }
 
+/**
+ * 얼굴 코 위치에 맞춰 꼬치 이미지를 그린다.
+ */
 function drawRod(stage, nose) {
   const rodW = GAME_CONFIG.rodWidth;
 
@@ -64,8 +72,11 @@ function drawRod(stage, nose) {
   image(App.assets.rod, nose.x - rodW / 2, nose.y, rodW, App.assets.rod.height);
 }
 
+/**
+ * 노트 정보를 마시멜로 이미지 하나로 그린다.
+ */
 function drawMarshmallow(note, x, y, state, rotation) {
-  const colorName = marshmallowColorForNote(note);
+  const colorName = getMarshmallowColorForNote(note);
   const img = App.assets.marshmallows[colorName][state];
   const size = GAME_CONFIG.noteSize * (state === "burnt" ? 1.06 : 1);
 
@@ -77,21 +88,30 @@ function drawMarshmallow(note, x, y, state, rotation) {
   pop();
 }
 
+/**
+ * 실패해서 튕겨 나간 마시멜로들을 그린다.
+ */
 function drawEjectedMarshmallows() {
   for (const item of Play.ejections) {
-    const noteLike = noteLikeForMarshmallowColor(item.color);
+    const noteLike = buildNoteForMarshmallowColor(item.color);
     drawMarshmallow(noteLike, item.x, item.y, item.state, item.rotation);
   }
 }
 
+/**
+ * 성공해서 꼬치에 쌓인 마시멜로들을 코 아래에 그린다.
+ */
 function drawSkeweredMarshmallows(nose) {
   for (let i = 0; i < Play.skewered.length; i += 1) {
     const item = Play.skewered[i];
     const y = nose.y + GAME_CONFIG.noteSize * (0.5 + i * 0.62);
-    drawMarshmallow(noteLikeForMarshmallowColor(item.color), nose.x, y, "roasted", 0);
+    drawMarshmallow(buildNoteForMarshmallowColor(item.color), nose.x, y, "roasted", 0);
   }
 }
 
+/**
+ * 꼬치 스택 보너스가 터질 때 생기는 원형 이펙트를 그린다.
+ */
 function drawStackBursts() {
   for (const burst of Play.stackBursts) {
     const age = millis() - burst.at;
@@ -121,28 +141,17 @@ function drawStackBursts() {
   }
 }
 
-function noteLikeForMarshmallowColor(colorName) {
+/**
+ * 색만 가진 마시멜로를 그리기 위해 최소 note 모양을 만든다.
+ */
+function buildNoteForMarshmallowColor(colorName) {
   return {
     drum: colorName === "blue" ? "hihat" : colorName === "red" ? "kick" : null,
   };
 }
 
 /**
- * 아직 화면에 남아야 하는 짧은 히트 이펙트만 유지한다.
- * @author 정제훈
- * @returns {object[]} 활성 이펙트 목록
- */
-function activeHitEffects() {
-  const now = millis();
-  Play.hitEffects = Play.hitEffects.filter(
-    (effect) => now - effect.at < effect.duration,
-  );
-  return Play.hitEffects;
-}
-
-/**
  * 히트 순간 판정선에 짧은 빛 번짐을 그린다.
- * @author 정제훈
  * @param {{ x: number, y: number, w: number, h: number }} stage - 스테이지 영역
  * @param {number} lineY - 판정선 y좌표
  * @param {object[]} effects - 활성 히트 이펙트
@@ -163,7 +172,6 @@ function drawHitLineEffects(stage, lineY, effects) {
 
 /**
  * 히트 위치에 판정별 링·스파크·미스 표시를 그린다.
- * @author 정제훈
  * @param {object[]} effects - 활성 히트 이펙트
  */
 function drawHitEffects(effects) {

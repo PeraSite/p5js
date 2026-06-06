@@ -1,6 +1,5 @@
 /**
  * Tone.js 피아노 샘플러를 생성하고 Audio.piano에 연결한다.
- * @author 정제훈
  * 로드 완료 시 Audio.pianoReady = true
  */
 function setupPiano() {
@@ -49,7 +48,6 @@ function setupPiano() {
 
 /**
  * Tone.js 드럼 샘플러를 생성하고 Audio.drums에 연결한다.
- * @author 정제훈
  * 로드 완료 시 Audio.drumsReady = true
  */
 function setupDrums() {

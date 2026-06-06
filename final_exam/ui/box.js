@@ -1,6 +1,5 @@
 /**
  * 채우기·테두리 옵션으로 사각형을 그린다.
- * @author 한채아
  * @param {number} x - 좌상단 x
  * @param {number} y - 좌상단 y
  * @param {number} w - 너비

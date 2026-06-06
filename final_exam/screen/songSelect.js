@@ -1,9 +1,8 @@
 /**
  * 곡 목록과 선택·재생 버튼이 있는 곡 선택 화면을 그린다.
- * @author 한채아
  */
 function drawSongSelectScreen() {
-  const stage = stageRect();
+  const stage = getStageRect();
   drawUiBackground(stage, { dim: 78 });
 
   drawCreamAssetPanel(stage.x + 16, stage.y + 76, stage.w - 32, stage.h - 172, {
@@ -53,9 +52,6 @@ function drawSongSelectScreen() {
     stage.w - 108,
     54,
     true,
-    () => {
-      resetGame();
-      App.state = "cameraSetup";
-    },
+    goToCameraSetupForSelectedSong,
   );
 }

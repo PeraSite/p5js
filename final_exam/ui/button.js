@@ -1,6 +1,5 @@
 /**
  * 라벨이 있는 버튼을 그리고 클릭 영역을 App.uiButtons에 등록한다.
- * @author 한채아
  * @param {string} label - 버튼 텍스트
  * @param {number} x - 좌상단 x
  * @param {number} y - 좌상단 y
@@ -32,7 +31,6 @@ function drawButton(label, x, y, w, h, enabled, onClick) {
 
 /**
  * 이미 그려진 영역(카드 등)에 투명 클릭 hitbox만 등록한다.
- * @author 한채아
  * @param {number} x - 좌상단 x
  * @param {number} y - 좌상단 y
  * @param {number} w - 너비
@@ -46,7 +44,6 @@ function registerButton(x, y, w, h, enabled, onClick) {
 
 /**
  * (x,y)가 등록된 버튼 안이면 해당 onClick을 호출한다.
- * @author 한채아
  * @param {number} x - 포인터 x
  * @param {number} y - 포인터 y
  */
@@ -64,7 +61,6 @@ function handlePress(x, y) {
 
 /**
  * p5 터치 시작 시 버튼 클릭을 처리한다.
- * @author 한채아
  * @returns {false} 기본 터치 동작 방지
  */
 function touchStarted() {
@@ -74,7 +70,6 @@ function touchStarted() {
 
 /**
  * p5 마우스 클릭 시 버튼 클릭을 처리한다.
- * @author 한채아
  * @returns {false} 기본 클릭 동작 방지
  */
 function mousePressed() {

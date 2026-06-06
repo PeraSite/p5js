@@ -1,11 +1,10 @@
 /**
  * 카메라 위에 얼굴 맞추기 안내와 OK 버튼 오버레이를 그린다.
- * @author 한채아
  */
 function drawCameraSetupScreen() {
   drawCamera();
 
-  const stage = stageRect();
+  const stage = getStageRect();
   drawBox(stage.x, stage.y, stage.w, stage.h, { fill: [16, 10, 14, 86] });
   drawCreamAssetPanel(stage.x + 34, stage.y + stage.h * 0.46, stage.w - 68, 154);
 
@@ -33,8 +32,6 @@ function drawCameraSetupScreen() {
     stage.w - 108,
     54,
     Face.noses.length > 0,
-    () => {
-      App.state = "howTo";
-    },
+    goToHowTo,
   );
 }

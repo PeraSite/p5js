@@ -1,9 +1,8 @@
 /**
  * 앱 전역: 화면 상태, 곡 목록, UI 버튼 큐.
- * @author 정제훈
  */
 const App = {
-  state: "main",
+  state: APP_STATES.MAIN,
   selectedSong: 0,
   uiButtons: [],
   songs: [],
@@ -18,7 +17,6 @@ const App = {
 
 /**
  * 플레이 세션: 채보, 노트, 점수, 판정 표시용 데이터.
- * @author 정제훈
  */
 const Play = {
   chart: null,
@@ -42,7 +40,6 @@ const Play = {
 
 /**
  * 얼굴 추적: 웹캠, faceMesh, 코 좌표들.
- * @author 정제훈
  */
 const Face = {
   video: null,
@@ -53,7 +50,6 @@ const Face = {
 
 /**
  * 오디오: Tone 피아노 샘플러와 드럼 샘플러.
- * @author 정제훈
  */
 const Audio = {
   piano: null,
@@ -64,7 +60,6 @@ const Audio = {
 
 /**
  * 온라인 리더보드: 결과 화면 입력·제출·표시 상태.
- * @author 정제훈
  */
 const Leaderboard = {
   name: "",

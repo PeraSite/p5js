@@ -1,10 +1,9 @@
 /**
  * 웹캠 영상을 9:16 스테이지에 거울 반전으로 그린다.
- * @author 한채아
  */
 function drawCamera() {
   background(0);
-  const stage = stageRect();
+  const stage = getStageRect();
   if (!Face.video || !Face.video.elt.videoWidth) return;
   const crop = cameraCrop();
 

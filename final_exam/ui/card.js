@@ -1,6 +1,5 @@
 /**
  * 선택 가능한 곡 카드를 그리고 클릭 영역을 등록한다.
- * @author 한채아
  * @param {number} x - 좌상단 x
  * @param {number} y - 좌상단 y
  * @param {number} w - 너비
@@ -38,6 +37,9 @@ function drawSelectableCard(x, y, w, h, selected, title, subtitle, thumbnail, on
   registerButton(x, y, w, h, true, onClick);
 }
 
+/**
+ * 곡 카드 왼쪽의 정사각형 썸네일 영역을 그린다.
+ */
 function drawThumbnail(thumbnail, x, y, size, selected) {
   push();
   rectMode(CORNER);

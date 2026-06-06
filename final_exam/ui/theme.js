@@ -1,3 +1,6 @@
+/**
+ * 캠프파이어 테마 색상과 공통 배경/패널 그림 함수를 모은다.
+ */
 const CAMP = {
   nightTop: [16, 22, 42],
   nightBottom: [42, 26, 23],
@@ -16,12 +19,18 @@ const CAMP = {
   ink: [59, 35, 25],
 };
 
-function campColor(name, alpha) {
+/**
+ * CAMP 팔레트에서 색을 꺼내고 필요하면 alpha를 붙인다.
+ */
+function getCampColor(name, alpha) {
   const base = CAMP[name] || CAMP.cream;
   if (alpha === undefined) return base;
   return [base[0], base[1], base[2], alpha];
 }
 
+/**
+ * 영역을 꽉 채우도록 이미지를 잘라서 그린다.
+ */
 function drawImageCover(img, x, y, w, h) {
   if (!img || !img.width || !img.height) return false;
   const sourceRatio = img.width / img.height;
@@ -44,6 +53,9 @@ function drawImageCover(img, x, y, w, h) {
   return true;
 }
 
+/**
+ * 이미지가 잘리지 않게 영역 안에 맞춰 그린다.
+ */
 function drawImageContain(img, x, y, w, h) {
   if (!img || !img.width || !img.height) return false;
   const scale = min(w / img.width, h / img.height);
@@ -54,6 +66,9 @@ function drawImageContain(img, x, y, w, h) {
   return true;
 }
 
+/**
+ * 이미지 일부 영역을 잘라낸 뒤 비율을 유지해 맞춰 그린다.
+ */
 function drawImageCropContain(img, x, y, w, h, sx, sy, sw, sh) {
   if (!img || !img.width || !img.height) return false;
   const scale = min(w / sw, h / sh);
@@ -64,6 +79,9 @@ function drawImageCropContain(img, x, y, w, h, sx, sy, sw, sh) {
   return true;
 }
 
+/**
+ * 메뉴와 결과 화면에서 쓰는 캠프 배경 이미지를 그린다.
+ */
 function drawUiBackground(stage, opts = {}) {
   background(16, 22, 42);
   if (!drawImageCover(App.assets.ui.background, stage.x, stage.y, stage.w, stage.h)) {
@@ -80,6 +98,9 @@ function drawUiBackground(stage, opts = {}) {
   }
 }
 
+/**
+ * 이미지 패널이 있으면 쓰고, 없으면 기본 크림 패널을 그린다.
+ */
 function drawCreamAssetPanel(x, y, w, h, opts = {}) {
   const { alpha = 255, selected = true } = opts;
   if (!App.assets.ui.panelCream) {
@@ -94,6 +115,9 @@ function drawCreamAssetPanel(x, y, w, h, opts = {}) {
   pop();
 }
 
+/**
+ * 픽셀 느낌의 밤하늘, 숲, 불빛 배경을 그린다.
+ */
 function drawCampBackdrop(stage, opts = {}) {
   const { footerFire = true, trees = true } = opts;
 
@@ -113,6 +137,9 @@ function drawCampBackdrop(stage, opts = {}) {
   if (footerFire) drawCampFooter(stage);
 }
 
+/**
+ * 캠프 배경 하늘에 작은 별들을 찍는다.
+ */
 function drawPixelStars(stage) {
   const stars = [
     [0.13, 0.1, 2],
@@ -131,6 +158,9 @@ function drawPixelStars(stage) {
   }
 }
 
+/**
+ * 캠프 배경 아래쪽의 나무 실루엣을 그린다.
+ */
 function drawForestSilhouette(stage) {
   const baseY = stage.y + stage.h * 0.78;
   noStroke();
@@ -145,6 +175,9 @@ function drawForestSilhouette(stage) {
   rect(stage.x, baseY, stage.w, stage.h - (baseY - stage.y));
 }
 
+/**
+ * 불빛처럼 보이는 따뜻한 원형 glow를 여러 겹 그린다.
+ */
 function drawWarmGlow(stage, cy, diameter, strength = 1) {
   noStroke();
   for (let i = 8; i >= 1; i -= 1) {
@@ -154,6 +187,9 @@ function drawWarmGlow(stage, cy, diameter, strength = 1) {
   }
 }
 
+/**
+ * 화면 아래쪽 장작과 작은 불꽃 장식을 그린다.
+ */
 function drawCampFooter(stage) {
   const y = stage.y + stage.h - 96;
   drawWarmGlow(stage, y + 36, stage.w * 0.9, 0.78);
@@ -173,6 +209,9 @@ function drawCampFooter(stage) {
   triangle(cx - 12, y + 60, cx + 5, y + 26, cx + 17, y + 60);
 }
 
+/**
+ * 버튼과 카드에 쓰는 나무 느낌 패널을 그린다.
+ */
 function drawWoodPanel(x, y, w, h, opts = {}) {
   const {
     selected = false,
@@ -207,6 +246,9 @@ function drawWoodPanel(x, y, w, h, opts = {}) {
   noStroke();
 }
 
+/**
+ * 안내 박스와 선택 상태에 쓰는 밝은 패널을 그린다.
+ */
 function drawCreamPanel(x, y, w, h, opts = {}) {
   const { selected = false, radius = 8 } = opts;
   drawBox(x + 2, y + 3, w, h, { fill: [53, 31, 22, 72], radius });
@@ -221,6 +263,9 @@ function drawCreamPanel(x, y, w, h, opts = {}) {
   rect(x + 7, y + 7, w - 14, 3, 2);
 }
 
+/**
+ * 나무 간판 모양 제목 박스를 그린다.
+ */
 function drawHangingSign(label, x, y, w, h, opts = {}) {
   const { size = 24 } = opts;
   stroke(CAMP.woodDark);
@@ -237,6 +282,9 @@ function drawHangingSign(label, x, y, w, h, opts = {}) {
   });
 }
 
+/**
+ * 작은 장식용 마시멜로 사각형을 그린다.
+ */
 function drawTinyMarshmallow(x, y, size, tintColor = CAMP.cream) {
   drawBox(x, y, size, size * 0.78, {
     fill: tintColor,

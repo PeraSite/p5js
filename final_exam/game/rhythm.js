@@ -1,221 +1,169 @@
 /**
- * 채보 기준으로 Play.notes와 점수·콤보 상태를 초기화한다.
- * @author 정제훈
+ * 노트 판정, 점수, 콤보 같은 리듬 게임 규칙을 처리한다.
  */
-function resetGame() {
-  Play.chart = App.songs[App.selectedSong].chartData;
-  Play.notes = Play.chart.notes.map((note, index) => ({
-    ...note,
-    id: index,
-    hit: false,
-    missed: false,
-  }));
-  Play.gameTime = 0;
-  Play.startedAt = 0;
-  Play.score = 0;
-  Play.combo = 0;
-  Play.maxCombo = 0;
-  Play.hits = 0;
-  Play.misses = 0;
-  Play.judge = "";
-  Play.hitEffects = [];
-  Play.shakeAt = 0;
-  Play.shakePower = 0;
-  Play.ejections = [];
-  Play.skewered = [];
-  Play.stackBursts = [];
-}
-
 /**
- * howTo 화면에서 플레이를 시작한다. 얼굴·사운드 검사 후 playing 상태로 전환.
- * @author 정제훈
- */
-async function startGame() {
-  if (App.state !== "howTo") return;
-  if (Face.noses.length === 0) {
-    Play.judge = "SKEWER REQUIRED";
-    Play.judgeAt = millis();
-    App.state = "cameraSetup";
-    return;
-  }
-  if (!Audio.pianoReady || !Audio.drumsReady) {
-    Play.judge = "LOADING SOUND";
-    Play.judgeAt = millis();
-    return;
-  }
-  await Tone.start();
-  resetGame();
-  Play.startedAt = millis();
-  App.state = "playing";
-}
-
-/**
- * 모든 활성 노트에 대해 충돌·미스 판정을 수행하고 곡 종료를 검사한다.
- * @author 정제훈
- * 마지막 노트 후 1.8초 지나면 App.state를 result로 변경
+ * playing 중 매 프레임 활성 노트를 판정한다.
  */
 function updateNotes() {
-  updateEjections();
-  updateStackBursts();
+  updatePlayEffects();
   for (const note of Play.notes) {
-    if (note.hit || note.missed) continue;
-
-    const pos = notePosition(note);
-    const delta = Play.gameTime - note.time;
-
-    let touched = false;
-    for (const nose of Face.noses) {
-      if (rodTipTouchesNote(nose, pos)) {
-        touched = true;
-        if (delta <= 0 && abs(delta) <= GAME_CONFIG.judgeWindows.at(-1).window) {
-          hitNote(note, delta, nose);
-        } else {
-          missNote(note, delta > 0 ? "BURNT" : "UNDER", true);
-        }
-        break;
-      }
-
-      if (rodBodyTouchesNote(nose, pos)) {
-        touched = true;
-        missNote(note, delta > 0 ? "BURNT" : "UNDER", true);
-        break;
-      }
-    }
-
-    if (!touched && delta > GAME_CONFIG.missAfter) {
-      missNote(note, "BURNT", false);
-    }
+    processActiveNote(note);
   }
-
-  const last = Play.notes[Play.notes.length - 1];
-  if (last && Play.gameTime > last.time + 1800) App.state = "result";
-}
-
-function rodTipTouchesNote(nose, pos) {
-  const xOk = abs(pos.x - nose.x) <= GAME_CONFIG.noteSize * 0.38;
-  const yOk =
-    pos.y >= nose.y - 2 &&
-    pos.y <= nose.y + GAME_CONFIG.noteSize * 0.46;
-  return xOk && yOk;
-}
-
-function rodBodyTouchesNote(nose, pos) {
-  const stage = stageRect();
-  const fireTop = stage.y + stage.h - GAME_CONFIG.fireHeight;
-  const nearRodX = abs(pos.x - nose.x) <
-    GAME_CONFIG.rodWidth * 0.5 + GAME_CONFIG.noteSize * 0.36;
-  const belowTip = pos.y > nose.y + GAME_CONFIG.rodTipRadius;
-  const aboveFire = pos.y < fireTop + GAME_CONFIG.noteSize * 0.25;
-  return nearRodX && belowTip && aboveFire;
+  finishGameIfSongEnded();
 }
 
 /**
- * 타이밍에 맞춘 노트를 처리하고 점수·콤보·판정·소리를 반영한다.
- * @author 정제훈
- * @param {object} note - Play.notes 항목
- * @param {number} delta - gameTime - note.time (ms)
+ * 아직 판정되지 않은 노트 하나를 hit/miss 중 하나로 처리한다.
  */
-function hitNote(note, delta, nose) {
-  const result = GAME_CONFIG.judgeWindows.find(
-    (item) => abs(delta) <= item.window,
-  );
+function processActiveNote(note) {
+  if (note.hit || note.missed) return;
+
+  const pos = getNotePosition(note);
+  const delta = getNoteDelta(note);
+  const contact = findBestNoteContact(pos, delta);
+
+  if (contact) {
+    applyNoteContact(note, delta, contact);
+    return;
+  }
+
+  if (isExpiredMiss(delta)) {
+    missNote(note, "BURNT", false);
+  }
+}
+
+/**
+ * 꼬치 끝 hit를 우선으로 보고, 없으면 첫 miss 접촉을 반환한다.
+ */
+function findBestNoteContact(pos, delta) {
+  let firstMiss = null;
+  for (const nose of Face.noses) {
+    const contact = getNoteContactForNose(nose, pos, delta);
+    if (!contact) continue;
+    if (contact.kind === "hit") return contact;
+    if (!firstMiss) firstMiss = contact;
+  }
+  return firstMiss;
+}
+
+/**
+ * 코 위치 하나가 노트를 어떻게 건드렸는지 판정한다.
+ */
+function getNoteContactForNose(nose, pos, delta) {
+  if (rodTipTouchesNote(nose, pos)) {
+    return isHitTiming(delta)
+      ? { kind: "hit", nose }
+      : { kind: "miss", label: getMissLabelForDelta(delta), eject: true };
+  }
+  if (rodBodyTouchesNote(nose, pos)) {
+    return { kind: "miss", label: getMissLabelForDelta(delta), eject: true };
+  }
+  return null;
+}
+
+/**
+ * 접촉 판정 결과에 따라 hitNote 또는 missNote로 보낸다.
+ */
+function applyNoteContact(note, delta, contact) {
+  if (contact.kind === "hit") {
+    hitNote(note, delta, contact);
+    return;
+  }
+  missNote(note, contact.label, contact.eject);
+}
+
+/**
+ * 노트가 아직 타이밍 라인을 지나기 전이고 판정 창 안이면 true다.
+ */
+function isHitTiming(delta) {
+  return delta <= 0 && abs(delta) <= getLargestJudgeWindow();
+}
+
+/**
+ * 노트가 너무 늦게 지나가 자동 miss가 되어야 하는지 확인한다.
+ */
+function isExpiredMiss(delta) {
+  return delta > GAME_CONFIG.missAfter;
+}
+
+/**
+ * 너무 이르면 UNDER, 너무 늦으면 BURNT 판정명을 만든다.
+ */
+function getMissLabelForDelta(delta) {
+  return delta > 0 ? "BURNT" : "UNDER";
+}
+
+/**
+ * 가장 넓은 판정 창을 가져와 roasted 상태 판단에 사용한다.
+ */
+function getLargestJudgeWindow() {
+  return GAME_CONFIG.judgeWindows.at(-1).window;
+}
+
+/**
+ * 노트가 정확히 맞았을 때 점수, 콤보, 소리, 꼬치 스택을 반영한다.
+ */
+function hitNote(note, delta, contact) {
+  const result = getJudgeResultForDelta(delta);
   note.hit = true;
-  Play.hits += 1;
-  Play.combo += 1;
-  Play.maxCombo = max(Play.maxCombo, Play.combo);
-  Play.score += result.score + Play.combo * 12;
-  Play.judge = result.label;
-  Play.judgeAt = millis();
-  addSkeweredMarshmallow(note, nose);
+  addHitScore(result);
+  showJudge(result.label);
+  addSkeweredMarshmallow(note, contact);
   addHitEffect(note, result.label);
   playNoteSound(note);
 }
 
-function addSkeweredMarshmallow(note, nose) {
+/**
+ * 타이밍 차이에 맞는 점수와 판정명을 찾는다.
+ */
+function getJudgeResultForDelta(delta) {
+  return GAME_CONFIG.judgeWindows.find((item) => abs(delta) <= item.window);
+}
+
+/**
+ * 성공 판정의 기본 점수와 콤보 보너스를 더한다.
+ */
+function addHitScore(result) {
+  Play.hits += 1;
+  Play.combo += 1;
+  Play.maxCombo = max(Play.maxCombo, Play.combo);
+  Play.score += result.score + Play.combo * GAME_CONFIG.comboScoreStep;
+}
+
+/**
+ * 화면 중앙에 잠깐 표시할 판정 문구를 저장한다.
+ */
+function showJudge(label) {
+  Play.judge = label;
+  Play.judgeAt = millis();
+}
+
+/**
+ * 성공한 마시멜로를 꼬치 스택에 올리고 꽉 차면 보너스를 준다.
+ */
+function addSkeweredMarshmallow(note, contact) {
   Play.skewered.unshift({
-    color: marshmallowColorForNote(note),
-    x: nose.x,
-    y: nose.y,
+    color: getMarshmallowColorForNote(note),
     at: millis(),
   });
 
   if (Play.skewered.length >= GAME_CONFIG.skewerStackLimit) {
-    addStackBurst(nose);
-    Play.score += GAME_CONFIG.skewerStackBonus;
-    Play.judge = `POP +${GAME_CONFIG.skewerStackBonus}`;
-    Play.judgeAt = millis();
-    Play.skewered = [];
+    clearFullSkewerStack(contact.nose);
   }
 }
 
-function addStackBurst(nose) {
-  Play.stackBursts.push({
-    x: nose.x,
-    y: nose.y + GAME_CONFIG.noteSize * 1.6,
-    at: millis(),
-    duration: 460,
-  });
-  if (Play.stackBursts.length > 6) Play.stackBursts.shift();
-}
-
-function updateStackBursts() {
-  const now = millis();
-  Play.stackBursts = Play.stackBursts.filter(
-    (burst) => now - burst.at < burst.duration,
-  );
-}
-
 /**
- * 히트·미스 순간의 좌표와 강도를 저장해 짧은 타격 이펙트로 사용한다.
- * @author 정제훈
- * @param {object} note - Play.notes 항목
- * @param {string} label - 판정 라벨
+ * 꼬치 스택이 가득 찼을 때 점수 보너스와 터지는 이펙트를 만든다.
  */
-function addHitEffect(note, label) {
-  const pos = notePosition(note);
-  const comboBoost = Play.combo >= 10 ? constrain(Play.combo / 50, 0.12, 0.35) : 0;
-  const levels = {
-    "MELLOW!": { power: 1.25, shake: 4, duration: 360 },
-    TOASTY: { power: 1, shake: 3, duration: 320 },
-    WARM: { power: 0.72, shake: 1.8, duration: 280 },
-    UNDER: { power: 0.48, shake: 0, duration: 240 },
-    BURNT: { power: 0.38, shake: 0, duration: 220 },
-  };
-  const level = levels[label] ?? levels.WARM;
-  const color = judgeEffectColor(label, note);
-
-  Play.hitEffects.push({
-    x: pos.x,
-    y: pos.y,
-    at: millis(),
-    label,
-    color,
-    power: level.power + comboBoost,
-    duration: level.duration,
-  });
-  if (Play.hitEffects.length > 24) Play.hitEffects.shift();
-
-  if (level.shake > 0) {
-    Play.shakeAt = millis();
-    Play.shakePower = level.shake + comboBoost * 3;
-  }
-}
-
-function judgeEffectColor(label, note) {
-  if (label === "BURNT") return [54, 44, 40];
-  if (label === "UNDER") return [255, 150, 170];
-  const colors = {
-    white: [255, 239, 205],
-    red: [255, 138, 138],
-    blue: [135, 207, 255],
-  };
-  return colors[marshmallowColorForNote(note)] ?? colors.white;
+function clearFullSkewerStack(nose) {
+  addStackBurst(nose);
+  Play.score += GAME_CONFIG.skewerStackBonus;
+  showJudge(`POP +${GAME_CONFIG.skewerStackBonus}`);
+  Play.skewered = [];
 }
 
 /**
- * 채보 노트에 지정된 피아노·드럼 소리를 한 번 재생한다.
- * @author 정제훈
- * @param {object} note - Play.notes 항목
+ * 성공한 노트에 연결된 피아노나 드럼 샘플을 재생한다.
  */
 function playNoteSound(note) {
   if (note.note) {
@@ -232,109 +180,13 @@ function playNoteSound(note) {
 }
 
 /**
- * 노트를 미스 처리하고 콤보를 초기화한다.
- * @author 정제훈
- * @param {object} note - Play.notes 항목
+ * 노트가 빗나갔을 때 콤보를 끊고 실패 이펙트를 만든다.
  */
 function missNote(note, label = "BURNT", eject = false) {
   note.missed = true;
   Play.misses += 1;
   Play.combo = 0;
-  Play.judge = label;
-  Play.judgeAt = millis();
-  playNoteSound(note);
+  showJudge(label);
   if (eject) addMarshmallowEjection(note);
   addHitEffect(note, label);
-}
-
-function addMarshmallowEjection(note) {
-  const pos = notePosition(note);
-  const dir = random() < 0.5 ? -1 : 1;
-  Play.ejections.push({
-    x: pos.x,
-    y: pos.y,
-    vx: dir * random(6.2, 8.6),
-    vy: random(-8.4, -5.8),
-    gravity: 0.55,
-    rotation: random(-0.25, 0.25),
-    spin: dir * random(0.12, 0.2),
-    color: marshmallowColorForNote(note),
-    state: marshmallowCookState(note),
-  });
-  if (Play.ejections.length > 18) Play.ejections.shift();
-}
-
-function updateEjections() {
-  const stage = stageRect();
-  Play.ejections = Play.ejections.filter((item) => {
-    item.x += item.vx;
-    item.y += item.vy;
-    item.vy += item.gravity;
-    item.rotation += item.spin;
-    return (
-      item.x > stage.x - GAME_CONFIG.noteSize * 3 &&
-      item.x < stage.x + stage.w + GAME_CONFIG.noteSize * 3 &&
-      item.y < stage.y + stage.h + GAME_CONFIG.noteSize * 3
-    );
-  });
-}
-
-/**
- * 현재 시각 기준 노트의 화면 좌표와 표시 여부를 계산한다.
- * @author 정제훈
- * @param {object} note - time, x 등 채보 노트
- * @returns {{ x: number, y: number, visible: boolean }} 그리기·충돌 판정용 좌표
- */
-/**
- * hits·misses 기준 정확도(%)를 계산한다.
- * @author 정제훈
- * @returns {number} 0~100
- */
-function playAccuracy() {
-  const total = Play.hits + Play.misses;
-  return total ? (Play.hits / total) * 100 : 0;
-}
-
-/**
- * 정확도 기준 등급(S/A/B/C)을 반환한다.
- * @author 정제훈
- * @returns {string}
- */
-function playRank() {
-  const accuracy = playAccuracy();
-  if (accuracy >= 95) return "S";
-  if (accuracy >= 85) return "A";
-  if (accuracy >= 70) return "B";
-  return "C";
-}
-
-function notePosition(note) {
-  const stage = stageRect();
-  const hitY = stage.y + stage.h * GAME_CONFIG.hitLineY;
-  const startY = stage.y - GAME_CONFIG.noteSize;
-  const endY = stage.y + stage.h + GAME_CONFIG.noteSize;
-  const delta = Play.gameTime - note.time;
-  const before =
-    (Play.gameTime - (note.time - GAME_CONFIG.approachTime)) /
-    GAME_CONFIG.approachTime;
-  const after = delta / 800;
-  const x = lerp(0.2, 0.8, constrain(note.x, 0, 1));
-  return {
-    x: stage.x + stage.w * x,
-    y: delta <= 0 ? lerp(startY, hitY, before) : lerp(hitY, endY, after),
-    visible: before >= 0 && after <= 1,
-  };
-}
-
-function marshmallowColorForNote(note) {
-  if (note.drum === "hihat") return "blue";
-  if (note.drum === "kick" || note.drum === "snare") return "red";
-  return "white";
-}
-
-function marshmallowCookState(note) {
-  const delta = Play.gameTime - note.time;
-  if (delta > 0) return "burnt";
-  if (abs(delta) <= GAME_CONFIG.judgeWindows.at(-1).window) return "roasted";
-  return "raw";
 }

@@ -1,6 +1,5 @@
 /**
  * 스타일 옵션을 적용해 텍스트를 그린다.
- * @author 한채아
  * @param {string} content - 표시할 문자열
  * @param {number} x - x 좌표
  * @param {number} y - y 좌표

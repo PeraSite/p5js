@@ -1,9 +1,8 @@
 /**
  * 타이틀 메인 화면을 그린다.
- * @author 한채아
  */
 function drawMainScreen() {
-  const stage = stageRect();
+  const stage = getStageRect();
   drawUiBackground(stage, { dim: 30 });
 
   drawImageContain(
@@ -28,8 +27,6 @@ function drawMainScreen() {
     stage.w - 108,
     54,
     true,
-    () => {
-      App.state = "songSelect";
-    },
+    goToSongSelect,
   );
 }

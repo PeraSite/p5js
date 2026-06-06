@@ -1,7 +1,6 @@
 /**
  * Firebase 앱 초기화와 공통 Firebase 객체 접근만 담당한다.
  * 게임 상태, 화면 상태, 리더보드 규칙을 알지 않는다.
- * @author 정제훈
  */
 const FirebaseClient = (() => {
   const config = {
@@ -20,6 +19,9 @@ const FirebaseClient = (() => {
   return {
     db,
 
+    /**
+     * Firebase 서버 시간을 기록할 때 쓰는 timestamp 값을 돌려준다.
+     */
     serverTimestamp() {
       return firebase.database.ServerValue.TIMESTAMP;
     },

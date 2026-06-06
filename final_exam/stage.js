@@ -1,9 +1,8 @@
 /**
  * 캔버스 안 9:16 플레이 스테이지의 위치와 크기를 계산한다.
- * @author 정제훈
  * @returns {{ x: number, y: number, w: number, h: number }} 스테이지 영역
  */
-function stageRect() {
+function getStageRect() {
   const ratio = width / height;
   let w = width;
   let h = height;

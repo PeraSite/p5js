@@ -1,6 +1,5 @@
 /**
  * 웹캠 프레임에서 9:16 비율로 잘라낼 소스 영역을 계산한다.
- * @author 정제훈
  * @returns {{ x: number, y: number, w: number, h: number }} 비디오 크롭 영역
  */
 function cameraCrop() {
@@ -19,7 +18,6 @@ function cameraCrop() {
 
 /**
  * 웹캠 캡처와 faceMesh 감지를 초기화한다.
- * @author 정제훈
  */
 function setupCamera() {
   Face.video = createCapture(
@@ -44,7 +42,6 @@ function setupCamera() {
 
 /**
  * 얼굴 랜드마크를 스테이지 좌표의 코 위치들(Face.noses)로 변환한다.
- * @author 정제훈
  * Face.noses에 {x,y} 배열 저장, 미감지 시 빈 배열
  */
 function updateNoses() {
@@ -53,7 +50,7 @@ function updateNoses() {
     return;
   }
 
-  const stage = stageRect();
+  const stage = getStageRect();
   const crop = cameraCrop();
   Face.noses = Face.faces.map((face) => {
     const point = face.keypoints[1];

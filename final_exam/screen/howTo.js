@@ -1,10 +1,9 @@
 /**
  * 조작 방법 안내와 플레이 시작 버튼 화면을 그린다.
- * @author 한채아
  */
 function drawHowToScreen() {
   drawCamera();
-  const stage = stageRect();
+  const stage = getStageRect();
   drawBox(stage.x, stage.y, stage.w, stage.h, { fill: [16, 10, 14, 120] });
 
   const panelX = stage.x + 28;
