@@ -30,13 +30,13 @@ function drawPlayingLeaderboard(stage) {
  * 플레이 리더보드 카드들의 위치와 크기를 정한다.
  */
 function getPlayingLeaderboardLayout(stage) {
-  const cardH = 34;
+  const cardH = 54;
   return {
     x: stage.x + 12,
-    y: stage.y + 66,
-    cardW: min(stage.w * 0.72, 268),
+    y: stage.y + 14,
+    cardW: min(stage.w * 0.78, 292),
     cardH,
-    rowGap: cardH + 4,
+    rowGap: cardH + 7,
   };
 }
 
@@ -60,10 +60,10 @@ function getPlayingLeaderboardCardOffset(entry, rowGap) {
  */
 function drawPlayingLeaderboardCard(entry, x, y, w, h) {
   const state = getPlayingLeaderboardCardState(entry);
-  const rankW = 42;
-  const dotSize = 7;
-  const scoreX = x + w - 11;
-  const nameX = x + rankW + 20;
+  const rankW = 56;
+  const dotSize = 11;
+  const scoreX = x + w - 15;
+  const nameX = x + rankW + 24;
 
   push();
   translate(x + w / 2, y + h / 2);
@@ -72,34 +72,40 @@ function drawPlayingLeaderboardCard(entry, x, y, w, h) {
   applyPlayingLeaderboardShadow(state.active);
 
   drawBox(x, y, w, h, {
-    fill: state.current ? [82, 45, 29, 208] : [43, 27, 24, 142],
-    stroke: state.current ? [255, 190, 93, state.active ? 230 : 150] : [255, 218, 156, 38],
-    strokeWeight: state.current ? 1.3 : 1,
+    fill: state.current ? [82, 45, 29, 244] : [25, 19, 19, 210],
+    stroke: state.current ? [255, 190, 93, state.active ? 255 : 206] : [255, 218, 156, 74],
+    strokeWeight: state.current ? 2 : 1.5,
     radius: 6,
   });
 
   drawText(`#${entry.displayRank}`, x + rankW / 2, y + h / 2, {
-    size: 12,
+    size: 20,
     alignH: CENTER,
     alignV: CENTER,
     style: BOLD,
-    fill: state.current ? CAMP.toast : CAMP.creamDim,
+    fill: state.current ? CAMP.toast : CAMP.cream,
+    outline: CAMP.coal,
+    outlineWeight: 3,
   });
 
   drawPlayingLeaderboardDot(x + rankW + 9, y + h / 2, dotSize, state.current);
-  drawText(getPlayingLeaderboardName(entry, w - 144), nameX, y + h / 2, {
-    size: 12,
+  drawText(getPlayingLeaderboardName(entry, w - 184), nameX, y + h / 2, {
+    size: 19,
     alignH: LEFT,
     alignV: CENTER,
     style: BOLD,
-    fill: state.current ? CAMP.cream : CAMP.creamDim,
+    fill: CAMP.cream,
+    outline: CAMP.coal,
+    outlineWeight: 3,
   });
   drawText(formatLeaderboardScore(entry.score), scoreX, y + h / 2, {
-    size: 12,
+    size: 19,
     alignH: RIGHT,
     alignV: CENTER,
     style: BOLD,
     fill: state.current ? CAMP.toast : CAMP.cream,
+    outline: CAMP.coal,
+    outlineWeight: 3,
   });
   pop();
 }
@@ -124,8 +130,8 @@ function getPlayingLeaderboardCardState(entry) {
 function applyPlayingLeaderboardShadow(active) {
   if (!active) return;
 
-  drawingContext.shadowColor = "rgba(255, 245, 176, 0.24)";
-  drawingContext.shadowBlur = 10;
+  drawingContext.shadowColor = "rgba(255, 210, 112, 0.32)";
+  drawingContext.shadowBlur = 14;
 }
 
 /**
@@ -144,17 +150,19 @@ function drawPlayingLeaderboardDot(x, y, size, current) {
  */
 function drawPlayingLeaderboardStatus(label, x, y, w, h) {
   drawBox(x, y, w, h, {
-    fill: [43, 27, 24, 150],
-    stroke: [255, 218, 156, 40],
-    strokeWeight: 1,
+    fill: [25, 19, 19, 194],
+    stroke: [255, 218, 156, 58],
+    strokeWeight: 1.5,
     radius: 6,
   });
   drawText(label, x + 14, y + h / 2, {
-    size: 12,
+    size: 20,
     alignH: LEFT,
     alignV: CENTER,
     style: BOLD,
-    fill: CAMP.creamDim,
+    fill: CAMP.cream,
+    outline: CAMP.coal,
+    outlineWeight: 3,
   });
 }
 
@@ -172,7 +180,7 @@ function getPlayingLeaderboardName(entry, maxW) {
 function truncatePlayingLeaderboardText(value, maxW) {
   let output = String(value || "");
   push();
-  textSize(12);
+  textSize(19);
   while (output.length > 1 && textWidth(output) > maxW) {
     output = output.slice(0, -2) + ".";
   }

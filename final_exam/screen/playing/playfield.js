@@ -68,8 +68,34 @@ function drawRoastGuide(stage, lineY) {
 function drawRod(stage, nose) {
   const rodW = GAME_CONFIG.rodWidth;
 
+  push();
+  stroke(54, 31, 18, 150);
+  strokeWeight(rodW + 4);
+  line(nose.x, nose.y, nose.x, stage.y + stage.h);
+  pop();
+
   imageMode(CORNER);
   image(App.assets.rod, nose.x - rodW / 2, nose.y, rodW, App.assets.rod.height);
+  drawRodHitPoint(nose);
+}
+
+/**
+ * 실제 성공 판정 영역과 꼬치 끝 기준점을 은은하게 표시한다.
+ */
+function drawRodHitPoint(nose) {
+  const hitbox = getRodTipHitbox(nose);
+
+  push();
+  noFill();
+  stroke(255, 234, 176, 110);
+  strokeWeight(2);
+  circle(hitbox.x, hitbox.y, hitbox.r * 2);
+
+  fill(255, 248, 214, 215);
+  stroke(89, 47, 21, 180);
+  strokeWeight(2);
+  circle(nose.x, nose.y, 9);
+  pop();
 }
 
 /**
@@ -84,6 +110,9 @@ function drawMarshmallow(note, x, y, state, rotation) {
   translate(x, y);
   rotate(rotation);
   imageMode(CENTER);
+  tint(40, 25, 15, 100);
+  image(img, 2, 4, size * 1.08, size * 1.08);
+  noTint();
   image(img, 0, 0, size, size);
   pop();
 }

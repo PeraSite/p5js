@@ -65,6 +65,7 @@ function setup() {
   textFont(App.font);
   setupPiano();
   setupDrums();
+  setupBurnSfx();
   setupCamera();
   App.selectedSong = 0;
   setAppState(APP_STATES.MAIN);

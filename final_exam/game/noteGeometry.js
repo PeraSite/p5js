@@ -42,14 +42,22 @@ function getNoteApproachProgress(note) {
 }
 
 /**
- * 꼬치 끝이 노트를 정확히 찌른 상황인지 확인한다.
+ * 꼬치 끝 주변의 넉넉한 성공 판정 영역을 계산한다.
+ */
+function getRodTipHitbox(nose) {
+  return {
+    x: nose.x,
+    y: nose.y + GAME_CONFIG.noteSize * GAME_CONFIG.rodTipHitboxYOffset,
+    r: GAME_CONFIG.noteSize * GAME_CONFIG.rodTipHitboxRadius,
+  };
+}
+
+/**
+ * 꼬치 끝이 노트를 찌른 상황인지 확인한다.
  */
 function rodTipTouchesNote(nose, pos) {
-  const xOk = abs(pos.x - nose.x) <= GAME_CONFIG.noteSize * 0.38;
-  const yOk =
-    pos.y >= nose.y - 2 &&
-    pos.y <= nose.y + GAME_CONFIG.noteSize * 0.46;
-  return xOk && yOk;
+  const hitbox = getRodTipHitbox(nose);
+  return dist(pos.x, pos.y, hitbox.x, hitbox.y) <= hitbox.r;
 }
 
 /**
@@ -60,7 +68,8 @@ function rodBodyTouchesNote(nose, pos) {
   const fireTop = stage.y + stage.h - GAME_CONFIG.fireHeight;
   const nearRodX = abs(pos.x - nose.x) <
     GAME_CONFIG.rodWidth * 0.5 + GAME_CONFIG.noteSize * 0.36;
-  const belowTip = pos.y > nose.y + GAME_CONFIG.rodTipRadius;
+  const hitbox = getRodTipHitbox(nose);
+  const belowTip = pos.y > hitbox.y + hitbox.r;
   const aboveFire = pos.y < fireTop + GAME_CONFIG.noteSize * 0.25;
   return nearRodX && belowTip && aboveFire;
 }

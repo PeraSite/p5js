@@ -11,36 +11,38 @@ function drawPlayingScreen() {
   drawPlayfield();
   pop();
 
-  const hitY = stage.y + stage.h * GAME_CONFIG.hitLineY;
-
   drawPlayingLeaderboard(stage);
-  drawPlayingTopHud(stage);
 
   if (Play.judge && millis() - Play.judgeAt < 520) {
+    const hitY = stage.y + stage.h * GAME_CONFIG.hitLineY;
     const judgeAge = millis() - Play.judgeAt;
     const judgePop = 1 + 0.24 * (1 - constrain(judgeAge / 180, 0, 1));
-    drawText(Play.judge, stage.x + stage.w / 2, hitY - 64, {
-      size: 28 * judgePop,
+    drawText(Play.judge, stage.x + stage.w / 2, hitY + 34, {
+      size: 32 * judgePop,
       alignH: CENTER,
       alignV: CENTER,
       style: BOLD,
       fill: getJudgeColor(Play.judge),
+      outline: CAMP.coal,
+      outlineWeight: 4,
     });
-    drawText(`COMBO ${Play.combo}`, stage.x + stage.w / 2, hitY - 30, {
-      size: 16 * judgePop,
+    drawText(`COMBO ${Play.combo}`, stage.x + stage.w / 2, hitY + 66, {
+      size: 24 * judgePop,
       alignH: CENTER,
       alignV: CENTER,
       style: BOLD,
       fill: [245, 245, 245],
+      outline: CAMP.coal,
+      outlineWeight: 4,
     });
   }
 
   if (Face.noses.length === 0) {
-    drawCreamPanel(stage.x + 44, stage.y + stage.h / 2 - 26, stage.w - 88, 52, {
+    drawCreamPanel(stage.x + 28, stage.y + stage.h / 2 - 34, stage.w - 56, 68, {
       selected: true,
     });
     drawText("WHERE'S THE SKEWER?", stage.x + stage.w / 2, stage.y + stage.h / 2, {
-      size: 22,
+      size: 28,
       alignH: CENTER,
       alignV: CENTER,
       style: BOLD,
@@ -49,23 +51,6 @@ function drawPlayingScreen() {
   }
 }
 
-/**
- * 플레이 중 상단 점수 바를 그린다.
- */
-function drawPlayingTopHud(stage) {
-  const hudH = 54;
-  const hudY = stage.y;
-  drawBox(stage.x, hudY, stage.w, hudH, { fill: [47, 28, 22, 178] });
-  drawBox(stage.x, hudY + hudH - 4, stage.w, 4, { fill: [255, 151, 66, 92] });
-
-  drawText(`SCORE ${Play.score}`, stage.x + stage.w / 2, hudY + hudH / 2, {
-    size: 19,
-    alignH: CENTER,
-    alignV: CENTER,
-    style: BOLD,
-    fill: CAMP.cream,
-  });
-}
 /**
  * hit 직후 화면이 얼마나 흔들릴지 계산한다.
  */

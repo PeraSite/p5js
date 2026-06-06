@@ -3,25 +3,31 @@
  */
 function drawResultScreen() {
   const stage = getStageRect();
+  const sheet = getResultSheetRect(stage);
   const accuracy = calculatePlayAccuracy();
   const rank = getPlayRank();
   const theme = getResultTheme(rank);
   const song = App.songs[App.selectedSong];
 
-  drawResultBackdrop(stage, theme);
+  drawResultBackdrop(stage, sheet, theme);
 
-  drawText(song.title, stage.x + stage.w / 2, stage.y + 30, {
-    size: 18,
+  drawText(getFittedText(song.title, sheet.w - 48, 23, BOLD), sheet.x + sheet.w / 2, sheet.y + 18, {
+    size: 23,
     alignH: CENTER,
     alignV: TOP,
     style: BOLD,
-    fill: [245, 245, 245],
+    fill: CAMP.ink,
+    outline: [255, 244, 216],
+    outlineWeight: 2,
   });
-  drawText(getResultBadgeText(accuracy), stage.x + stage.w / 2, stage.y + 58, {
-    size: 12,
+  drawText(getResultBadgeText(accuracy), sheet.x + sheet.w / 2, sheet.y + 48, {
+    size: 17,
     alignH: CENTER,
     alignV: TOP,
+    style: BOLD,
     fill: theme.accent,
+    outline: CAMP.coal,
+    outlineWeight: 3,
   });
 
   drawResultRank(stage, rank, theme);
@@ -29,12 +35,25 @@ function drawResultScreen() {
   drawResultLeaderboard(stage);
   drawResultActions(stage, theme);
 }
+
+/**
+ * 결과 화면의 모든 UI가 들어가는 노란 시트 영역을 계산한다.
+ */
+function getResultSheetRect(stage) {
+  return {
+    x: stage.x + 14,
+    y: stage.y + 24,
+    w: stage.w - 28,
+    h: stage.h - 44,
+  };
+}
+
 /**
  * 결과 화면 뒤 배경과 큰 패널을 그린다.
  */
-function drawResultBackdrop(stage, theme) {
+function drawResultBackdrop(stage, sheet, theme) {
   drawUiBackground(stage, { dim: 62 });
-  drawCreamAssetPanel(stage.x + 24, stage.y + 76, stage.w - 48, stage.h - 166, {
+  drawCreamAssetPanel(sheet.x, sheet.y, sheet.w, sheet.h, {
     alpha: 244,
   });
   fill(theme.accent[0], theme.accent[1], theme.accent[2], 22);
@@ -70,11 +89,16 @@ function drawResultMarks(stage, theme) {
  * 중앙의 큰 랭크 카드와 랭크 제목을 그린다.
  */
 function drawResultRank(stage, rank, theme) {
-  const cx = stage.x + stage.w / 2;
-  const cy = stage.y + 160;
+  const sheet = getResultSheetRect(stage);
+  const x = sheet.x + 28;
+  const y = sheet.y + 76;
+  const rankW = min(112, sheet.w * 0.31);
+  const rankH = 128;
+  const scoreX = x + rankW + 12;
+  const scoreW = sheet.x + sheet.w - 28 - scoreX;
 
-  drawBox(cx - 82, cy - 46, 164, 154, {
-    fill: [255, 237, 197, 164],
+  drawBox(x, y, rankW, rankH, {
+    fill: [255, 237, 197, 186],
     stroke: theme.accent,
     strokeWeight: 3,
     radius: 8,
@@ -82,21 +106,51 @@ function drawResultRank(stage, rank, theme) {
   noFill();
   stroke(theme.accent[0], theme.accent[1], theme.accent[2], 90);
   strokeWeight(3);
-  rect(cx - 70, cy - 34, 140, 130, 8);
+  rect(x + 10, y + 10, rankW - 20, rankH - 20, 8);
 
-  drawText(rank, cx, cy - 48, {
-    size: 112,
+  drawText(rank, x + rankW / 2, y + 2, {
+    size: 90,
     alignH: CENTER,
     alignV: TOP,
     style: BOLD,
     fill: theme.dim,
   });
-  drawText(theme.title, cx, cy + 78, {
-    size: 16,
+  drawText(theme.title, x + rankW / 2, y + 102, {
+    size: 14,
     alignH: CENTER,
     alignV: TOP,
     style: BOLD,
     fill: CAMP.ink,
+  });
+
+  drawBox(scoreX, y, scoreW, rankH, {
+    fill: [45, 28, 23, 224],
+    stroke: [255, 218, 156, 84],
+    strokeWeight: 2,
+    radius: 8,
+  });
+  drawText("SCORE", scoreX + 16, y + 18, {
+    size: 14,
+    alignH: LEFT,
+    alignV: TOP,
+    style: BOLD,
+    fill: CAMP.creamDim,
+  });
+  drawText(getFittedText(Play.score, scoreW - 32, 31, BOLD), scoreX + 16, y + 40, {
+    size: 31,
+    alignH: LEFT,
+    alignV: TOP,
+    style: BOLD,
+    fill: CAMP.cream,
+    outline: CAMP.coal,
+    outlineWeight: 3,
+  });
+  drawText(`BEST ${Play.maxCombo}`, scoreX + 16, y + 98, {
+    size: 18,
+    alignH: LEFT,
+    alignV: TOP,
+    style: BOLD,
+    fill: theme.accent,
   });
 }
 
@@ -104,12 +158,13 @@ function drawResultRank(stage, rank, theme) {
  * 점수, 정확도, 콤보, hit/miss 통계를 2x2 카드로 그린다.
  */
 function drawResultStats(stage, accuracy) {
+  const sheet = getResultSheetRect(stage);
   const stats = buildResultStats(accuracy);
-  const x = stage.x + 42;
-  const y = stage.y + 276;
-  const gap = 10;
-  const cellW = (stage.w - 84 - gap) / 2;
-  const cellH = 56;
+  const x = sheet.x + 28;
+  const y = sheet.y + 224;
+  const gap = 9;
+  const cellW = (sheet.w - 56 - gap) / 2;
+  const cellH = 58;
 
   for (let i = 0; i < stats.length; i += 1) {
     const col = i % 2;
@@ -119,17 +174,19 @@ function drawResultStats(stage, accuracy) {
 
     drawWoodPanel(cellX, cellY, cellW, cellH, { fillColor: [99, 57, 37], radius: 6 });
     drawText(stats[i][0], cellX + 12, cellY + 9, {
-      size: 10,
+      size: 14,
       alignH: LEFT,
       alignV: TOP,
       fill: CAMP.creamDim,
     });
-    drawText(stats[i][1], cellX + 12, cellY + 28, {
-      size: 18,
+    drawText(getFittedText(stats[i][1], cellW - 24, 21, BOLD), cellX + 12, cellY + 28, {
+      size: 21,
       alignH: LEFT,
       alignV: TOP,
       style: BOLD,
       fill: CAMP.cream,
+      outline: CAMP.coal,
+      outlineWeight: 2,
     });
   }
 }

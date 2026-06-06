@@ -49,13 +49,14 @@ const Face = {
 };
 
 /**
- * 오디오: Tone 피아노 샘플러와 드럼 샘플러.
+ * 오디오: Tone 피아노 샘플러, 드럼 샘플러, 효과음 신스.
  */
 const Audio = {
   piano: null,
   pianoReady: false,
   drums: null,
   drumsReady: false,
+  burn: null,
 };
 
 /**

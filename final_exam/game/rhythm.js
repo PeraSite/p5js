@@ -189,4 +189,5 @@ function missNote(note, label = "BURNT", eject = false) {
   showJudge(label);
   if (eject) addMarshmallowEjection(note);
   addHitEffect(note, label);
+  playBurnMissSound();
 }

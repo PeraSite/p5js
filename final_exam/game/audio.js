@@ -63,3 +63,21 @@ function setupDrums() {
   ).toDestination();
   Audio.drums.volume.value = GAME_CONFIG.audioVolumes.drums;
 }
+
+/**
+ * 미스 판정 때 쓰는 짧은 탄 소리 효과음을 만든다.
+ */
+function setupBurnSfx() {
+  Audio.burn = new Tone.NoiseSynth({
+    noise: { type: "pink" },
+    envelope: { attack: 0.04, decay: 0.32, sustain: 0.08, release: 0.16 },
+  }).toDestination();
+  Audio.burn.volume.value = -4;
+}
+
+/**
+ * 푸쉬쉭 하고 타는 느낌의 미스 효과음을 재생한다.
+ */
+function playBurnMissSound() {
+  if (Audio.burn) Audio.burn.triggerAttackRelease(0.38, Tone.immediate(), 1);
+}
