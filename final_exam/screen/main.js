@@ -21,6 +21,19 @@ function drawMainScreen() {
   });
 
   drawButton(
+    document.fullscreenElement ? "EXIT" : "FULL",
+    stage.x + stage.w - 106,
+    stage.y + stage.h - 50,
+    88,
+    40,
+    true,
+    () => {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen();
+    },
+  );
+
+  drawButton(
     "ROAST!",
     stage.x + 54,
     stage.y + stage.h - 124,
